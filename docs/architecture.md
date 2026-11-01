@@ -1,7 +1,7 @@
 # Architecture
 
 The [Bond](https://github.com/agentica-lang/bond) web framework in front of llama.cpp, called through the Agentica FFI
-(no C code). Written for Agentica 0.19.0-beta.3 and Bond 0.4.0 (the tag pinned in `agentica.toml`).
+(no C code). Written for Agentica 0.20.0 and Bond 0.4.0 (the tag pinned in `agentica.toml`).
 
 ## How it works
 
