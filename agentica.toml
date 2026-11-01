@@ -1,6 +1,6 @@
 name = "agentica-llm"
 
-# Needs Agentica 0.20.0 or later (Bond 0.4.0, pinned below, needs 0.19.0 or later).
+# Needs Agentica 0.19.0 or later (Bond 0.4.0 does, for `HttpServerOptions` with field defaults).
 
 [style]
 blank_line_after_end = true
