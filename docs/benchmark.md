@@ -195,8 +195,8 @@ cell ranged from 15 to 34 tok/s), so the runner now measures them during the run
   the pump task. Tokens per second match the non-streaming runs.
 - **Sampling runs on a scheduler thread.** `llama_sampler_sample` is a plain `def`; with 16 sequences it blocks that
   scheduler for the sum of the calls. It is short (the stats show about 3 ms per step), but a `compute def` for the
-  whole "sample every row" loop, or a C callback that samples inside `llama_decode`, would be free of it
-  (FFI callbacks exist since Agentica 0.19.0; not tried).
-- **llama.cpp's log goes to stderr unchecked**, because this repo sets no `llama_log_set` callback (see [gaps.md](gaps.md)).
+  whole "sample every row" loop would be free of it. A C callback that samples inside `llama_decode` is not an option
+  today: a callback cannot run in a `compute def` or from a C thread (see [gaps.md](gaps.md)).
+- **llama.cpp's log goes to stderr unchecked**, because a `llama_log_set` callback cannot run there (see [gaps.md](gaps.md)).
 - **One engine task, one decode at a time.** That is how `llama.cpp` works on one context, so it is no loss, but
   there is no second context to overlap prefill and decode.

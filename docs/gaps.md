@@ -9,14 +9,17 @@ Closed since the first version:
   (Bond 0.2.0 has `Bond.json_as` with a codec).
 - No hex literals: `0x80` works since Agentica 0.19.0. `utf8_complete` (`src/engine.agc`) still writes `128`, `192`,
   `224` and `240`.
-- No FFI callbacks (#851): `callback` in an extern block works since Agentica 0.19.0. This repo uses none yet, so
-  `llama_log_set`, `progress_callback` and `abort_callback` are unset and llama.cpp logs about 200 KB to stderr at start.
 - A channel could not say "the reader left" without a send: since Agentica 0.20.0 `closed?` is `true` as soon as the
   channel is closed. The engine does not use it yet: it sends with a timeout of 0 and treats any failed send (still the
   strings `channel: closed` and `channel: timed out`, which the reference says not to match on) as "stop this
   sequence", so it learns that the client left at the next token, and a request whose client leaves before its first
   token (the route is blocked in `recv`) still runs until that token.
 
+- **No way to set a llama.cpp callback.** FFI callbacks exist since Agentica 0.19.0 (#851), but a callback runs only
+  inside a plain `def` call, on the caller's task: one that C calls from a `compute def` or from a thread of its own
+  gives zero and the call fails with `RUNTIME-NATIVE-CALLBACK`. `llama_model_load_from_file` and `llama_decode` are
+  `compute def` (`src/llama.agc`), and ggml calls from its own threads, so the log, `progress_callback` and
+  `abort_callback` cannot be set: `agentica smoke.agc` prints about 200 KB of llama.cpp log lines to stderr at start.
 - **A project `[native]` file must be under `native/`.** `[native.llama]` with `linux = { file = "deps/llama.cpp/libllama.so.0" }`
   fails: `PKG-MANIFEST-INVALID ... not a native file ... a native file is a path in the native/ folder of the package`.
   A prebuilt library that lives elsewhere (a fetched release) needs symlinks into `native/linux/` (what

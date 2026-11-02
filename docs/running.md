@@ -39,7 +39,7 @@ curl -N localhost:8080/v1/chat/completions -H 'content-type: application/json' \
 
 Options: `--model PATH --host H --port N --threads N --ctx N --parallel N --batch N --backends DIR --stats on`.
 
-llama.cpp logs a lot to stderr at start (no log callback is set, see [gaps.md](gaps.md)); send it to a file.
+llama.cpp logs a lot to stderr at start (a log callback cannot be set, see [gaps.md](gaps.md)); send it to a file.
 `--stats on` prints, every 5 s of work, how much of the engine's time went into `llama_decode` and how much into
 Agentica.
 
