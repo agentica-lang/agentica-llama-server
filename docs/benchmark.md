@@ -1,7 +1,7 @@
 # Benchmark
 
-agentica-llm against `llama-server` of the same llama.cpp release (b12012), on the same model and settings, with and
-without streaming. The raw JSON of every run is in [bench/results/](../bench/results/): `threads4.json`,
+agentica-llama-server against `llama-server` of the same llama.cpp release (b12012), on the same model and settings,
+with and without streaming. The raw JSON of every run is in [bench/results/](../bench/results/): `threads4.json`,
 `threads8.json` (one JSON answer per request) and `threads4-stream.json`, `threads8-stream.json` (`stream: true`, with
 the time to first token). Every rep is there, with the cores the neighbours used before and during it.
 
@@ -39,8 +39,8 @@ With `--stream` every request says `"stream": true` and `stream_options.include_
 client records the time to first token (TTFT): the time until the first event whose `delta.content` is not empty. The
 role-only first chunk does not count. A stream gets a new connection per request on both servers, because
 `llama-server` closes the connection after a stream although it says keep-alive. Tokens come from the usage chunk.
-(`llama-server` counts the end-of-answer token in `completion_tokens`, agentica-llm does not; with `max_tokens` 64 nearly
-every answer ends at the limit, so the tok/s are comparable.)
+(`llama-server` counts the end-of-answer token in `completion_tokens`, agentica-llama-server does not; with
+`max_tokens` 64 nearly every answer ends at the limit, so the tok/s are comparable.)
 
 ```sh
 python3 bench/run_all.py --agentica /path/to/agentica --threads 4 --max-load 1.5 --max-load-during 1.2 --attempts 2 --patience 300
@@ -49,17 +49,17 @@ python3 bench/run_all.py ... --stream      # adds time to first token
 
 ## Results without streaming
 
-Medians of 3 runs. Ratio = agentica-llm / llama-server.
+Medians of 3 runs. Ratio = agentica-llama-server / llama-server.
 
 ### 4 threads (one per physical core)
 
 | server | concurrency | req/s | generated tok/s | p50 latency s | p95 latency s |
 |---|---|---|---|---|---|
-| agentica-llm | 1 | 0.29 | 18.7 | 3.38 | 3.58 |
+| agentica-llama-server | 1 | 0.29 | 18.7 | 3.38 | 3.58 |
 | llama-server | 1 | 0.30 | 19.3 | 3.30 | 3.45 |
-| agentica-llm | 4 | 0.36 | 23.3 | 10.97 | 11.49 |
+| agentica-llama-server | 4 | 0.36 | 23.3 | 10.97 | 11.49 |
 | llama-server | 4 | 0.37 | 23.7 | 10.75 | 11.15 |
-| agentica-llm | 16 | 0.36 | 23.1 | 44.16 | 45.54 |
+| agentica-llama-server | 16 | 0.36 | 23.1 | 44.16 | 45.54 |
 | llama-server | 16 | 0.36 | 23.3 | 43.96 | 44.83 |
 
 Ratios of tok/s: 0.97, 0.98, 0.99.
@@ -68,11 +68,11 @@ Ratios of tok/s: 0.97, 0.98, 0.99.
 
 | server | concurrency | req/s | generated tok/s | p50 latency s | p95 latency s |
 |---|---|---|---|---|---|
-| agentica-llm | 1 | 0.25 | 15.6 | 4.03 | 4.55 |
+| agentica-llama-server | 1 | 0.25 | 15.6 | 4.03 | 4.55 |
 | llama-server | 1 | 0.24 | 15.5 | 4.09 | 4.59 |
-| agentica-llm | 4 | 0.32 | 20.8 | 12.53 | 12.58 |
+| agentica-llama-server | 4 | 0.32 | 20.8 | 12.53 | 12.58 |
 | llama-server | 4 | 0.28 | 18.1 | 14.19 | 14.40 |
-| agentica-llm | 16 | 0.33 | 21.4 | 47.61 | 48.67 |
+| agentica-llama-server | 16 | 0.33 | 21.4 | 47.61 | 48.67 |
 | llama-server | 16 | 0.34 | 21.5 | 47.51 | 48.43 |
 
 Ratios of tok/s: 1.01, 1.15, 1.00. The concurrency 4 row is reproducible (its three reps are 20.3, 20.9, 20.8 against
@@ -89,29 +89,30 @@ Medians of 3 runs. TTFT is the time to the first content token; total latency is
 
 | server | concurrency | generated tok/s | TTFT p50 s | TTFT p95 s | total p50 s | total p95 s |
 |---|---|---|---|---|---|---|
-| agentica-llm | 1 | 18.3 | 0.62 | 0.70 | 3.49 | 3.60 |
+| agentica-llama-server | 1 | 18.3 | 0.62 | 0.70 | 3.49 | 3.60 |
 | llama-server | 1 | 18.7 | 0.61 | 0.73 | 3.39 | 3.59 |
-| agentica-llm | 4 | 22.7 | 2.49 | 2.66 | 11.29 | 11.50 |
+| agentica-llama-server | 4 | 22.7 | 2.49 | 2.66 | 11.29 | 11.50 |
 | llama-server | 4 | 20.6 | 2.38 | 2.73 | 12.42 | 12.71 |
-| agentica-llm | 16 | 18.8 | 31.88 | 38.84 | 52.81 | 63.12 |
+| agentica-llama-server | 16 | 18.8 | 31.88 | 38.84 | 52.81 | 63.12 |
 | llama-server | 16 | 15.6 | 37.54 | 40.32 | 65.06 | 68.83 |
 
 The concurrency 16 rows are **noisy**: a neighbour used 1 to 3 cores during some reps (the tok/s of the three reps are
-18.8, 13.4, 19.0 for agentica-llm and 15.6, 12.5, 21.4 for `llama-server`), so read them as "the same", not as a win.
+18.8, 13.4, 19.0 for agentica-llama-server and 15.6, 12.5, 21.4 for `llama-server`), so read them as "the same", not
+as a win.
 The same for one rep of concurrency 4 (19.7 against 22.7, 22.7).
 
 ### 8 threads
 
 | server | concurrency | generated tok/s | TTFT p50 s | TTFT p95 s | total p50 s | total p95 s |
 |---|---|---|---|---|---|---|
-| agentica-llm | 1 | 15.5 | 0.67 | 0.77 | 4.08 | 4.53 |
+| agentica-llama-server | 1 | 15.5 | 0.67 | 0.77 | 4.08 | 4.53 |
 | llama-server | 1 | 15.7 | 0.67 | 0.78 | 4.02 | 4.55 |
-| agentica-llm | 4 | 20.6 | 2.53 | 2.96 | 12.39 | 12.88 |
+| agentica-llama-server | 4 | 20.6 | 2.53 | 2.96 | 12.39 | 12.88 |
 | llama-server | 4 | 17.2 | 2.01 | 2.87 | 14.81 | 15.86 |
-| agentica-llm | 16 | 21.4 | 28.01 | 28.65 | 47.82 | 48.23 |
+| agentica-llama-server | 16 | 21.4 | 28.01 | 28.65 | 47.82 | 48.23 |
 | llama-server | 16 | 21.6 | 27.81 | 28.62 | 47.21 | 48.48 |
 
-(One agentica-llm rep of concurrency 4 ran at 6.7 tok/s with a neighbour at 1.3 cores; the median ignores it.)
+(One agentica-llama-server rep of concurrency 4 ran at 6.7 tok/s with a neighbour at 1.3 cores; the median ignores it.)
 
 No request failed in any run.
 
@@ -119,7 +120,7 @@ No request failed in any run.
 
 | server | idle after load | peak (VmHWM), plain | peak, streaming | end of run, plain |
 |---|---|---|---|---|
-| agentica-llm | 691 MB | 799 MB | 801 MB | 765 MB |
+| agentica-llama-server | 691 MB | 799 MB | 801 MB | 765 MB |
 | llama-server | 671 MB | 705 MB | 707 MB | 705 MB |
 
 ### The serving layer alone (`GET /health`, 3000 requests, both servers pinned to CPUs 0 to 3 with `taskset`)
@@ -130,9 +131,9 @@ Medians of 3 runs, every rep in [bench/results/health.json](../bench/results/hea
 
 | server | concurrency | req/s | p50 ms | p95 ms |
 |---|---|---|---|---|
-| agentica-llm (Bond 0.2.0 on `std/http`) | 1 | 1734 | 0.52 | 0.64 |
+| agentica-llama-server (Bond 0.2.0 on `std/http`) | 1 | 1734 | 0.52 | 0.64 |
 | llama-server | 1 | 2454 | 0.34 | 0.45 |
-| agentica-llm | 16 | 2888 | 3.35 | 16.02 |
+| agentica-llama-server | 16 | 2888 | 3.35 | 16.02 |
 | llama-server | 16 | 2733 | 2.97 | 18.43 |
 
 (One Python client process produces most of that ceiling, and the CPUs are capped.)
@@ -144,14 +145,14 @@ Medians of 3 runs, every rep in [bench/results/health.json](../bench/results/hea
 - The streamed text equals the non-streaming greedy text (`tests/test_api.py`, with multi-byte emoji that split
   across tokens).
 - Decoded side by side (concurrency 8), answers drift from the one-at-a-time ones late in the text in both servers
-  (agentica-llm 1 to 2 of 8 identical, llama-server 0 to 1 of 8): the batch shape changes the float reduction order of
-  the quantized kernels. It is not cross-sequence contamination, which would diverge at once.
+  (agentica-llama-server 1 to 2 of 8 identical, llama-server 0 to 1 of 8): the batch shape changes the float reduction
+  order of the quantized kernels. It is not cross-sequence contamination, which would diverge at once.
 
 ## An honest reading
 
-- **Parity, not a win.** Without streaming, agentica-llm is within 3 % of `llama-server` in 5 of 6 cells and ahead
-  by 15 % in one (8 threads, concurrency 4). With streaming the same: the cells where it is ahead look like noise or
-  like `llama-server` suffering (see the notes under each table).
+- **Parity, not a win.** Without streaming, agentica-llama-server is within 3 % of `llama-server` in 5 of 6 cells and
+  ahead by 15 % in one (8 threads, concurrency 4). With streaming the same: the cells where it is ahead look like noise
+  or like `llama-server` suffering (see the notes under each table).
 - **Streaming is free here.** At concurrency 1 the tok/s and the total latency with `stream: true` are within about 3 %
   of the plain runs on both servers. The time to first token at concurrency 1 is 0.6 to 0.7 s on both: one prefill of
   about 28 tokens plus the first decode step at 1.4 GHz. It is the same on the two servers, so Agentica's layers (the
