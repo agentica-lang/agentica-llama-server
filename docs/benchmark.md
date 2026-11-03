@@ -19,8 +19,7 @@ servers are what matter**; do not compare these absolute numbers with the 0.18.0
 It is a **shared machine**: other agents run builds and test suites on it. The runner (`bench/run_all.py`) waits for
 fewer than 1.5 busy neighbour cores before each run, measures the cores the neighbours used *during* the run (the
 machine's busy cores minus what the server and the client used), and redoes a run once when that was over 1.2.
-Neighbour cores during the kept runs: median 0.35 to 0.43, and the worst runs are listed below. Treat differences
-under about 10 % as noise.
+Neighbour cores during the kept runs: median 0.35 to 0.43. Treat differences under about 10 % as noise.
 
 ## Method
 
@@ -151,17 +150,15 @@ Medians of 3 runs, every rep in [bench/results/health.json](../bench/results/hea
 ## An honest reading
 
 - **Parity, not a win.** Without streaming, agentica-llm is within 3 % of `llama-server` in 5 of 6 cells and ahead
-  by 15 % in one (8 threads, concurrency 4). With streaming the same: equal at concurrency 1, equal to ahead at 4 and
-  16, and the cells where it is ahead are the ones that look like noise or like `llama-server` suffering (see the notes
-  under each table).
+  by 15 % in one (8 threads, concurrency 4). With streaming the same: the cells where it is ahead look like noise or
+  like `llama-server` suffering (see the notes under each table).
 - **Streaming is free here.** At concurrency 1 the tok/s and the total latency with `stream: true` are within about 3 %
   of the plain runs on both servers. The time to first token at concurrency 1 is 0.6 to 0.7 s on both: one prefill of
   about 28 tokens plus the first decode step at 1.4 GHz. It is the same on the two servers, so Agentica's layers (the
   route, the channel, the pump, Bond's SSE, `std/http`) add nothing visible to it.
 - **TTFT grows with the number of requests in flight, not with the server.** At concurrency 4 it is about 2.0 to
   2.5 s (four prompts prefilled together and decoded among the others' steps); at concurrency 16 it is 28 to 38 s
-  because 8 requests wait for a slot. That is the closed-loop test with more clients than slots, not a property of the
-  streaming path.
+  because 8 requests wait for a slot (the closed-loop test has more clients than slots).
 - **The model dominates.** 0.5B Q4 on 4 cores generates about 15 to 24 tok/s here whatever sits in front of it, and
   concurrency barely raises it: CPU decode is compute-bound, so batching gains little. The same would not hold on a
   GPU, where the serving layer's share of the step matters far more.
@@ -180,9 +177,9 @@ Medians of 3 runs, every rep in [bench/results/health.json](../bench/results/hea
 ## Older runs
 
 `bench/results/0.18.0/` holds the JSON of the first version (Agentica 0.18.0, Bond at a commit, no streaming) on the
-uncapped CPU; its conclusion was the same (parity). `bench/results/first-pass/` is a 4-thread run of this version
-that was thrown away: the runner then checked the neighbours only before a run, and a neighbour that started during one
-spoiled it (the same cell ranged from 15 to 34 tok/s). That is why the runner now measures the neighbours during the run.
+uncapped CPU; its conclusion was the same (parity). `bench/results/first-pass/` is a thrown-away 4-thread run of this
+version: the runner then checked the neighbours only before a run, and one that started during it spoiled it (the same
+cell ranged from 15 to 34 tok/s), so the runner now measures them during the run.
 
 ## Where Agentica adds overhead, and what would remove it
 
@@ -193,14 +190,13 @@ spoiled it (the same cell ranged from 15 to 34 tok/s). That is why the runner no
 - **Logits stay in C on purpose.** Sampling is done by llama.cpp's sampler chain (`llama_sampler_sample`); walking
   151k floats per token in Agentica would be orders of magnitude slower, and `Native.get_array_of_float32` would
   build a 151k-item `List[Float]` per row (this is where #396 matters most for any sampler written in Agentica).
-- **Streaming costs a little per token, and it does not show.** Each token is a channel send from the engine, a
-  `JSON.encode` of the chunk and a `Bond.sse_event` in the pump task, and a channel send to Bond. The engine does only the
-  first part inside its step (a `send` with timeout 0, not timed separately); the rest runs in other tasks. Tokens per
-  second with `stream: true` match the non-streaming runs (see the tables).
+- **Streaming costs a little per token, and it does not show.** Each token is a channel send from the engine (inside its
+  step, with timeout 0, not timed separately), then a `JSON.encode`, a `Bond.sse_event` and a channel send to Bond in
+  the pump task. Tokens per second match the non-streaming runs.
 - **Sampling runs on a scheduler thread.** `llama_sampler_sample` is a plain `def`; with 16 sequences it blocks that
   scheduler for the sum of the calls. It is short (the stats show about 3 ms per step), but a `compute def` for the
-  whole "sample every row" loop, or a C callback that samples inside `llama_decode`, would be free of it
-  (needs FFI callbacks, #851).
-- **llama.cpp's log goes to stderr unchecked**, because `llama_log_set` needs a callback (#851).
+  whole "sample every row" loop would be free of it. A C callback that samples inside `llama_decode` is not an option
+  today: a callback cannot run in a `compute def` or from a C thread (see [gaps.md](gaps.md)).
+- **llama.cpp's log goes to stderr unchecked**, because a `llama_log_set` callback cannot run there (see [gaps.md](gaps.md)).
 - **One engine task, one decode at a time.** That is how `llama.cpp` works on one context, so it is no loss, but
   there is no second context to overlap prefill and decode.

@@ -17,7 +17,7 @@ agentica install
   layouts in `src/llama.agc`. The release archive ships no headers, so the struct layouts were copied from `llama.h` at
   tag `b12012`; a wrong field list is undefined behavior, so re-check them if you change the tag.
 - `agentica install`: Bond 0.4.0 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
-  `agentica.lock`). It needs Agentica 0.19.0 or later.
+  `agentica.lock`).
 
 Nothing under `deps/` is committed.
 
@@ -39,7 +39,7 @@ curl -N localhost:8080/v1/chat/completions -H 'content-type: application/json' \
 
 Options: `--model PATH --host H --port N --threads N --ctx N --parallel N --batch N --backends DIR --stats on`.
 
-llama.cpp logs a lot to stderr at start (the log callback needs an FFI callback, #851); send it to a file.
+llama.cpp logs a lot to stderr at start (a log callback cannot be set, see [gaps.md](gaps.md)); send it to a file.
 `--stats on` prints, every 5 s of work, how much of the engine's time went into `llama_decode` and how much into
 Agentica.
 
