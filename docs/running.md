@@ -52,7 +52,8 @@ AGENTICA=/path/to/agentica python3 -m unittest tests.test_api
 AGENTICA=/path/to/agentica python3 -m unittest tests.test_cli
 ```
 
-`tests.test_api` starts the server with 4 slots and checks the routes, the streamed chunks (they add up to the non-streaming greedy
-answer, UTF-8 stays whole, the stream ends with `[DONE]`) and that clients that leave mid-stream free their slots.
+`tests.test_api` starts the server with 4 slots and checks the routes, the streamed chunks (they add up to the
+non-streaming greedy answer, UTF-8 stays whole, the stream ends with `[DONE]`) and that clients that leave mid-stream
+free their slots.
 
 `tests.test_cli` checks the flags (`--help`, bad values, a valid set) and needs the llama.cpp libraries, not the model.
