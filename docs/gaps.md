@@ -5,6 +5,9 @@ were rechecked with Agentica 0.22.0 and still fail; the other repros are from Ag
 
 Closed since the first version:
 
+- No flag parser: `std/option_parser` (Agentica 0.23.0) replaced the loop over `System.args()` (`src/cli.agc`). It
+  has no way to pick the exit code of a bad command line (`OP.run!` always exits 2, the server exits 1), so `main`
+  reads `OP.parse` itself.
 - Bond had no streaming body (Bond 0.2.0 has `Bond.stream` and `Bond.sse`) and `Bond.json` encoded a struct twice
   (Bond 0.2.0 has `Bond.json_as` with a codec).
 - No hex literals: `0x80` works since Agentica 0.19.0. `utf8_complete` (`src/engine.agc`) still writes `128`, `192`,
@@ -40,8 +43,6 @@ Closed since the first version:
 - **No bulk write of a small-int list into native memory.** Only `put_array_of_int32/int64/float32/float64`
   exist; the `int8` `logits` array of `llama_batch` goes through `Bytes.from_list` and `put_bytes`, and the
   `seq_id` pointer-to-int cells need a `get_pointer` and a `put_int32` per token.
-- **Top-level `server.agc` has no flag parser.** Every program that wants `--port N` writes the same loop over
-  `System.args()` (`parse`/`apply` in `server.agc`); a small `std/args` would remove it.
 - **Different batch shapes give different greedy text** (not an Agentica bug; llama.cpp float order). It is listed so
   nobody builds a test on "batched equals sequential".
 
