@@ -23,14 +23,14 @@ class CliTest(unittest.TestCase):
             self.assertIn(f"--{name}", result.stdout)
         self.assertIn("(default: 8080)", result.stdout)
 
-    def test_bad_value_names_the_option_and_exits_1(self):
+    def test_bad_value_names_the_option_and_exits_2(self):
         result = server("--port", "abc")
-        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.returncode, 2)
         self.assertIn("invalid value for --port: 'abc' is not an Int", result.stderr)
 
-    def test_unknown_option_exits_1(self):
+    def test_unknown_option_exits_2(self):
         result = server("--bogus", "1")
-        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.returncode, 2)
         self.assertIn("unknown option --bogus", result.stderr)
 
     def test_valid_flags_reach_the_model_load(self):

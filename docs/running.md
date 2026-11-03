@@ -38,7 +38,7 @@ curl -N localhost:8080/v1/chat/completions -H 'content-type: application/json' \
 `"stream_options": {"include_usage": true}` adds a last chunk with the token counts.
 
 Options: `--model PATH --host H --port N --threads N --ctx N --parallel N --batch N --backends DIR --stats on|off`
-(`--name value` or `--name=value`); `--help` lists them with their defaults. A bad command line is a message on stderr and exit 1.
+(`--name value` or `--name=value`); `--help` lists them with their defaults. A bad command line is a message on stderr and exit 2; a failure to load the model or to listen is `error: ...` and exit 1.
 
 llama.cpp logs a lot to stderr at start (a log callback cannot be set, see [gaps.md](gaps.md)); send it to a file.
 `--stats on` prints, every 5 s of work, how much of the engine's time went into `llama_decode` and how much into

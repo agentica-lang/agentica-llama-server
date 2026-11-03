@@ -19,22 +19,9 @@ struct EngineJob
   requests: Channel[Engines.GenRequest]
 end
 
+# `OP.run!` prints the help and exits 0, or prints a mistake of the command line to stderr and exits 2.
 def main() -> Void
-  case Cli.parse(System.args())
-    ok(options) -> run(options)
-    error(text) -> exit_for(text)
-  end
-end
-
-# The help goes to stdout and ends the run normally; a mistake of the command line goes to stderr and exits 1.
-def exit_for(text: String) -> Void
-  if OP.help?(text)
-    puts(OP.message(text))
-    return
-  end
-
-  IO.warn(OP.message(text))
-  System.exit(1)
+  run(OP.run!(Cli.parse(System.args())))
 end
 
 def run(options: Cli.Options) -> Void

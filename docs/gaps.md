@@ -5,9 +5,8 @@ were rechecked with Agentica 0.22.0 and still fail; the other repros are from Ag
 
 Closed since the first version:
 
-- No flag parser: `std/option_parser` (Agentica 0.23.0) replaced the loop over `System.args()` (`src/cli.agc`). It
-  has no way to pick the exit code of a bad command line (`OP.run!` always exits 2, the server exits 1), so `main`
-  reads `OP.parse` itself.
+- No flag parser: `std/option_parser` (Agentica 0.23.0) replaced the loop over `System.args()` (`src/cli.agc`). What
+  it still lacks (limits of an `Int`, the help layout, `on`/`off` values) is agentica-lang/agentica#1048.
 - Bond had no streaming body (Bond 0.2.0 has `Bond.stream` and `Bond.sse`) and `Bond.json` encoded a struct twice
   (Bond 0.2.0 has `Bond.json_as` with a codec).
 - No hex literals: `0x80` works since Agentica 0.19.0. `utf8_complete` (`src/engine.agc`) still writes `128`, `192`,
