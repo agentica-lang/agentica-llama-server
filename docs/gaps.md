@@ -1,7 +1,7 @@
 # Gaps found in Agentica, Bond and the FFI
 
 Each is a short bullet with a repro. `Int` `min`/`max`, `case` as an expression and the entry file in a subfolder
-were rechecked with Agentica 0.22.0 and still fail; the other repros are from Agentica 0.18.0 and were not rerun.
+were rechecked with Agentica 0.23.0 and still fail; the other repros are from Agentica 0.18.0 and were not rerun.
 
 Closed since the first version:
 

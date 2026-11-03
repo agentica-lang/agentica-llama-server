@@ -15,8 +15,8 @@ export struct Options
   stats: Bool
 end
 
-## Reads the words of `System.args()`. `--help` and a bad command line are errors: `OP.message` gives the text and
-## `OP.help?` tells them apart.
+## Reads the words of `System.args()`. `--help` and a bad command line are errors: the caller passes the result to
+## `OP.run!`, which prints the help or the message and exits.
 export def parse(args: List[String]) -> Result[Options]
   parsed = try OP.parse(parser(), args)
   return ok(

@@ -28,6 +28,11 @@ class CliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("invalid value for --port: 'abc' is not an Int", result.stderr)
 
+    def test_stats_takes_only_on_or_off(self):
+        result = server("--stats", "maybe")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid value for --stats: 'maybe' is not one of on, off", result.stderr)
+
     def test_unknown_option_exits_2(self):
         result = server("--bogus", "1")
         self.assertEqual(result.returncode, 2)
