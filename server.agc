@@ -1,27 +1,17 @@
 ## The inference server: Bond routes in front of an engine task that batches requests on llama.cpp.
 ##
-## agentica server.agc [--model PATH] [--port N] [--threads N] [--ctx N] [--parallel N] [--batch N]
-##                     [--backends DIR] [--stats on]
+## agentica server.agc [--model PATH] [--host H] [--port N] [--threads N] [--ctx N] [--parallel N] [--batch N]
+##                     [--backends DIR] [--stats on|off] [--help]
 
 import Api from "src/api"
 import Bond from "pkg/bond/bond"
+import Cli from "src/cli"
 import Engines from "src/engine"
 import Llama from "src/llama"
 import HTTP from "std/http"
+import OP from "std/option_parser"
 
 REQUEST_QUEUE = 4096
-
-struct Options
-  model: String = "deps/qwen2.5-0.5b-instruct-q4_k_m.gguf"
-  backends: String = "native/linux"
-  host: String = "127.0.0.1"
-  port: Int = 8080
-  threads: Int = 8
-  n_ctx: Int = 8192
-  parallel: Int = 8
-  n_batch: Int = 2048
-  stats: Bool = false
-end
 
 struct EngineJob
   model: Llama.Model
@@ -29,8 +19,13 @@ struct EngineJob
   requests: Channel[Engines.GenRequest]
 end
 
+# `OP.run!` prints the help and exits 0, or prints a mistake of the command line to stderr and exits 2.
 def main() -> Void
-  case serve(System.args())
+  run(OP.run!(Cli.parse(System.args())))
+end
+
+def run(options: Cli.Options) -> Void
+  case serve(options)
     ok(_) -> puts("stopped")
     error(message) ->
       puts("error: #{message}")
@@ -38,8 +33,7 @@ def main() -> Void
   end
 end
 
-def serve(args: List[String]) -> Result[Void]
-  options = try parse(args, Options())
+def serve(options: Cli.Options) -> Result[Void]
   Llama.init(options.backends)
   model = try Llama.load_model(options.model)
   requests: Channel[Engines.GenRequest] = Channel.new(REQUEST_QUEUE)
@@ -67,55 +61,3 @@ end
 def run_engine(job: EngineJob) -> Result[Void]
   return Engines.run(job.model, job.config, job.requests)
 end
-
-# `--name value` pairs; a flag that is not known or has no value is an error.
-def parse(args: List[String], start: Options) -> Result[Options]
-  options = start
-  i = 0
-  while i < args.size
-    if i + 1 >= args.size
-      return error("#{args[i]} needs a value")
-    end
-
-    options = try apply(options, args[i], args[i + 1])
-    i += 2
-  end
-
-  return ok(options)
-end
-
-def apply(options: Options, flag: String, value: String) -> Result[Options]
-  case flag
-    "--stats" -> return ok(options.with(stats: value == "on"))
-    "--model" -> return ok(options.with(model: value))
-    "--backends" -> return ok(options.with(backends: value))
-    "--host" -> return ok(options.with(host: value))
-    "--port" -> return ok(options.with(port: try value.to_i))
-    "--threads" -> return ok(options.with(threads: try value.to_i))
-    "--ctx" -> return ok(options.with(n_ctx: try value.to_i))
-    "--parallel" -> return ok(options.with(parallel: try value.to_i))
-    "--batch" -> return ok(options.with(n_batch: try value.to_i))
-    _ -> return error("unknown flag #{flag}")
-  end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

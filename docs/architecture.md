@@ -1,7 +1,7 @@
 # Architecture
 
 The [Bond](https://github.com/agentica-lang/bond) web framework in front of llama.cpp, called through the Agentica FFI
-(no C code). Written for Agentica 0.20.0 and Bond 0.4.0.
+(no C code). Written for Agentica 0.23.0 and Bond 0.5.0.
 
 ## How it works
 
@@ -57,11 +57,13 @@ client <-SSE- Bond (std/http) <- events: Channel[Bytes] <- pump task <- reply: C
 
 ```text
 agentica.toml, agentica.lock   Bond pinned by tag; [native.llama] and [native.ggml]
-server.agc                     the program (flags, wiring)
+server.agc                     the program (wiring)
+src/cli.agc                    the flags, read with `std/option_parser`
 src/numbers.agc                `smaller`, shared by the other files
 smoke.agc                      one sequence, to check the bindings
 scripts/                       fetch scripts (URL, tag and sha256 recorded in each)
 bench/client.py, run_all.py    the load client and the comparison runner
 bench/results/                 the JSON of every run behind the tables
 tests/test_api.py              end-to-end test of the routes, streaming and a client that leaves
+tests/test_cli.py              the flags: `--help`, a bad value, an unknown flag, a valid set (no model needed)
 ```
