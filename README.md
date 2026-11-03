@@ -1,4 +1,4 @@
-# agentica-llm
+# agentica-llama-server
 
 A prototype LLM inference server written in [Agentica](https://github.com/agentica-lang/agentica): the
 [Bond](https://github.com/agentica-lang/bond) web framework in front of llama.cpp, called through the Agentica FFI
