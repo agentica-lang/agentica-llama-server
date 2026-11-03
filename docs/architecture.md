@@ -1,7 +1,7 @@
 # Architecture
 
 The [Bond](https://github.com/agentica-lang/bond) web framework in front of llama.cpp, called through the Agentica FFI
-(no C code). Written for Agentica 0.23.0 and Bond after 0.4.0.
+(no C code). Written for Agentica 0.23.0 and Bond 0.5.0.
 
 ## How it works
 
@@ -56,7 +56,7 @@ client <-SSE- Bond (std/http) <- events: Channel[Bytes] <- pump task <- reply: C
 `src/llama.agc`, `src/engine.agc`, `src/api.agc` and `server.agc` are described above.
 
 ```text
-agentica.toml, agentica.lock   Bond pinned by commit; [native.llama] and [native.ggml]
+agentica.toml, agentica.lock   Bond pinned by tag; [native.llama] and [native.ggml]
 server.agc                     the program (wiring)
 src/cli.agc                    the flags, read with `std/option_parser`
 src/numbers.agc                `smaller`, shared by the other files
