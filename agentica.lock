@@ -3,6 +3,6 @@ version = 1
 [[package]]
 name = "bond"
 git = "https://github.com/agentica-lang/bond"
-tag = "0.5.0"
-commit = "fbc1608ecccaca90f33ccde347906ddef8f10df5"
-hash = "sha256:f1ff93f17c0f7a146b77f65ece8092a77665ec01f8ee23e3bde9309f89712c74"
+tag = "0.6.1"
+commit = "aa5ad3673cc58bdc35354e8c060f8906a83116d9"
+hash = "sha256:68d4f744cdf58580b023760c2d76544c154ab2f15c28971ec8ea8cc1ff13b1fa"
