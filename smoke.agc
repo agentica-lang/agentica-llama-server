@@ -1,6 +1,6 @@
 ## Generates one answer on one sequence, to check the bindings: `agentica smoke.agc`.
 
-import Llama from "src/llama"
+import Llama from "src/llama_server/llama"
 
 def generate(model: Llama.Model, ctx: Llama.Context, prompt: List[Int], limit: Int) -> Result[String]
   sampler = try Llama.new_sampler(0.0, 1)

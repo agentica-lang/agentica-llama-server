@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The release archive ships no headers. The struct layouts in src/llama.agc are
+# The release archive ships no headers. The struct layouts in src/llama_server/llama.agc are
 # copied from llama.h of the same tag; this fetches it for reference/checking.
 set -euo pipefail
 TAG="b12012"

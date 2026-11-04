@@ -2,9 +2,9 @@
 ## `"stream": true`) and `GET /health`.
 
 import Bond from "pkg/bond/bond"
-import Engines from "engine"
-import Llama from "llama"
-import Numbers from "numbers"
+import Engines from "../llama_server/engine"
+import Llama from "../llama_server/llama"
+import Numbers from "../llama_server/numbers"
 
 DEFAULT_MAX_TOKENS = 128
 ANSWER_TIMEOUT_MS = 600_000
