@@ -8,7 +8,6 @@ import Bond from "pkg/bond/bond"
 import Cli from "src/llama_server/cli"
 import Engines from "src/llama_server/engine"
 import Llama from "src/llama_server/llama"
-import HTTP from "std/http"
 import OP from "std/option_parser"
 
 REQUEST_QUEUE = 4096

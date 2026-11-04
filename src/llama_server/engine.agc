@@ -103,14 +103,14 @@ export def run(model: Llama.Model, config: EngineConfig, requests: Channel[GenRe
   )
 
   seqs: List[Seq] = []
-  stats = Stats(steps: 0, rows: 0, decode_ns: 0, step_ns: 0, since_ms: Time.monotonic_ms())
+  _stats = Stats(steps: 0, rows: 0, decode_ns: 0, step_ns: 0, since_ms: Time.monotonic_ms())
   while true
     seqs = admit(engine, seqs, requests)
     if not seqs.empty?
       began = Time.monotonic_ns()
       done = step(engine, seqs)
       seqs = done.seqs
-      stats = account(config, stats, done, Time.monotonic_ns() - began)
+      _stats = account(config, _stats, done, Time.monotonic_ns() - began)
     end
   end
 
