@@ -22,7 +22,7 @@ class CliTest(unittest.TestCase):
         for name in ["model", "backends", "host", "port", "threads", "ctx", "parallel", "batch", "stats"]:
             self.assertIn(f"--{name}", result.stdout)
         # Agentica 0.24 shows defaults in brackets, 0.23 in parentheses.
-        self.assertRegex(result.stdout, r"[(\[]default: 8080[)\]]")
+        self.assertRegex(result.stdout, r"\(default: 8080\)|\[default: 8080\]")
 
     def test_bad_value_names_the_option_and_exits_2(self):
         result = server("--port", "abc")
