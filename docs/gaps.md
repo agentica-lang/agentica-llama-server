@@ -29,10 +29,10 @@ Closed since the first version:
   anywhere in the tree would fix it.
 - **`Int` has no `min`, `max` or `clamp`.** `n_batch.min(512)` is `CHECK-UNKNOWN-METHOD: Int has no method "min"`;
   `src/llama_server/numbers.agc` holds a `smaller(a, b)` for the three files that need it.
-- **An entry file in a subfolder cannot import the project's `src/`.** `tools/smoke.agc` with `import Llama from
-  "src/llama"` fails with `CHECK-IMPORT-IO: cannot resolve import`; imports resolve relative to the importing file's
-  folder, so every runnable program has to sit at the repo root (or the files need `../`, which this form does not
-  allow). The diagnostic does not say what the path was resolved against.
+- **An entry file in a subfolder cannot import the project's `src/` by its project path.** `tools/smoke.agc` with
+  `import Llama from "src/llama_server/llama"` fails with `CHECK-IMPORT-IO: cannot resolve import`: imports resolve
+  relative to the importing file's folder, so a runnable program sits at the repo root, or names the file with `../`
+  as `src/llama_server_web/api.agc` does. The diagnostic does not say what the path was resolved against.
 - **A defs-only `extern` block has to come after every block that has a resource or a struct**, in the same file
   (`CHECK-DECL-ORDER: structs, enums, type aliases and resources come before functions`), so the one-line `ggml`
   block had to move to the end of `src/llama_server/llama.agc` and cannot sit by the library it belongs to.
