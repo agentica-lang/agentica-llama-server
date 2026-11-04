@@ -14,4 +14,4 @@ linux = { file = "native/linux/libllama.so.0" }
 linux = { file = "native/linux/libggml.so.0" }
 
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.5.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.6.1" }
