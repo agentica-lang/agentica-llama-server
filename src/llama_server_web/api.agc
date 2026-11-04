@@ -142,6 +142,7 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
     stream: stream,
     reply: reply,
   )
+
   case api.requests.send(request, ANSWER_TIMEOUT_MS)
     ok(_) ->
       if stream
@@ -191,6 +192,7 @@ def respond(api: Api, conn: Bond.Conn, result: Engines.GenResult) -> Bond.Conn
       total_tokens: result.prompt_tokens + result.completion_tokens,
     ),
   )
+
   return Bond.json_as(conn, 200, JSON.codec(ChatResponse), response)
 end
 
@@ -218,6 +220,7 @@ def stream_answer(
         model: api.model_name,
         include_usage: include_usage,
       )
+
       # Owning: the task owns `reply` and `events`, so a crash of the pump closes them and the response ends.
       Task.spawn_owning(&pump_events, pump)
       return ok(Bond.sse(conn, events))
@@ -270,13 +273,11 @@ def relay(pump: Pump, first: Engines.GenResult) -> Void
   end
 
   if pump.include_usage and not send_usage(pump, piece)
-
     return
   end
 
   _ = pump.events.send(Bond.sse_event("[DONE]"), EVENT_SEND_TIMEOUT_MS)
 end
-
 
 def send_error(pump: Pump, message: String) -> Void
   failure = JSON.from({"error": {"message": message, "type": "server_error"}})
@@ -291,6 +292,7 @@ def send_chunk(pump: Pump, delta: Delta, finish: JsonField[String]) -> Bool
     model: pump.model,
     choices: [ChunkChoice(index: 0, delta: delta, finish_reason: finish)],
   )
+
   return pump.events.send(Bond.sse_event(JSON.encode(chunk)), EVENT_SEND_TIMEOUT_MS).ok?
 end
 
@@ -300,9 +302,9 @@ def send_usage(pump: Pump, last: Engines.GenResult) -> Bool
   usage = Usage(
     prompt_tokens: last.prompt_tokens,
     completion_tokens: last.completion_tokens,
-
     total_tokens: last.prompt_tokens + last.completion_tokens,
   )
+
   chunk = Chunk(
     id: pump.id,
     object: "chat.completion.chunk",
@@ -311,11 +313,6 @@ def send_usage(pump: Pump, last: Engines.GenResult) -> Bool
     choices: [],
     usage: JsonField.Value(usage),
   )
+
   return pump.events.send(Bond.sse_event(JSON.encode(chunk)), EVENT_SEND_TIMEOUT_MS).ok?
 end
-
-
-
-
-
-

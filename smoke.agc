@@ -37,10 +37,14 @@ def run(model_path: String) -> Result[Void]
   Llama.init("native/linux")
   model = try Llama.load_model(model_path)
   ctx = try Llama.new_context(model, 2048, 512, 1, 4)
-  text = try Llama.chat_prompt(model, [
-    Llama.ChatMessage(role: "system", content: "You are a helpful assistant."),
-    Llama.ChatMessage(role: "user", content: "Say hello in five words."),
-  ])
+  text = try Llama.chat_prompt(
+    model,
+    [
+      Llama.ChatMessage(role: "system", content: "You are a helpful assistant."),
+      Llama.ChatMessage(role: "user", content: "Say hello in five words."),
+    ],
+  )
+
   puts(text)
   tokens = try Llama.tokenize(model, text)
   puts("prompt tokens: #{tokens.size}")
@@ -55,10 +59,3 @@ def main() -> Void
     error(message) -> puts("error: #{message}")
   end
 end
-
-
-
-
-
-
-
