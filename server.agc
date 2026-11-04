@@ -3,11 +3,11 @@
 ## agentica server.agc [--model PATH] [--host H] [--port N] [--threads N] [--ctx N] [--parallel N] [--batch N]
 ##                     [--backends DIR] [--stats on|off] [--help]
 
-import Api from "src/api"
+import Api from "src/llama_server_web/api"
 import Bond from "pkg/bond/bond"
-import Cli from "src/cli"
-import Engines from "src/engine"
-import Llama from "src/llama"
+import Cli from "src/llama_server/cli"
+import Engines from "src/llama_server/engine"
+import Llama from "src/llama_server/llama"
 import HTTP from "std/http"
 import OP from "std/option_parser"
 

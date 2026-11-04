@@ -20,6 +20,17 @@ curl -N localhost:8080/v1/chat/completions -H 'content-type: application/json' \
 
 Needs Agentica 0.23.0 or later (for `std/option_parser`); Bond 0.5.0 is pinned in `agentica.toml`.
 
+## Layout
+
+```text
+server.agc, smoke.agc     entry points, at the root (imports resolve from the importing file's folder)
+src/llama_server/         the domain: engine, llama.cpp FFI bindings, numbers, command line
+src/llama_server_web/     HTTP: the Bond routes (api)
+```
+
+Rule: `llama_server/` never imports `llama_server_web/`, Bond or `std/http`. The web side calls the domain, never the
+reverse.
+
 ## Benchmark
 
 On a 4-core laptop CPU (capped at 1.4 GHz) with Qwen2.5-0.5B, it is at parity with `llama-server` of the same llama.cpp
