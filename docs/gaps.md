@@ -1,7 +1,8 @@
 # Gaps found in Agentica, Bond and the FFI
 
-Each is a short bullet with a repro. `Int` `min`/`max`, `case` as an expression and the entry file in a subfolder
-were rechecked with Agentica 0.23.0 and still fail; the other repros are from Agentica 0.18.0 and were not rerun.
+Each is a short bullet with a repro. Rechecked with Agentica 0.23.0 and still failing: `Int` `min`/`max`, `case` as an
+expression, the entry file in a subfolder, the `[native]` file path and the order of a defs-only `extern` block. The
+callback and bulk write limits are as the 0.23.0 reference states them; the other repros were not rerun.
 
 Closed since the first version:
 
@@ -27,12 +28,15 @@ Closed since the first version:
   A prebuilt library that lives elsewhere (a fetched release) needs symlinks into `native/linux/` (what
   `scripts/fetch-llama.sh` does) or an absolute `system` path that cannot be committed. A project-relative path
   anywhere in the tree would fix it.
-- **`Int` has no `min`, `max` or `clamp`.** `n_batch.min(512)` is `CHECK-UNKNOWN-METHOD: Int has no method "min"`;
-  `src/llama_server/numbers.agc` holds a `smaller(a, b)` for the three files that need it.
+- **`Int` has no `min` or `max`.** `n_batch.min(512)` is `CHECK-UNKNOWN-METHOD: Int has no method "min"`.
+  Agentica 0.23.0 added `n.clamp(lo, hi)` and `[a, b].min.unwrap!`, but a clamp needs a lower bound that the call
+  sites do not have and the list form allocates on the engine's step path, so `src/llama_server/numbers.agc` keeps
+  `smaller(a, b)` for the three files that need it.
 - **An entry file in a subfolder cannot import the project's `src/` by its project path.** `tools/smoke.agc` with
   `import Llama from "src/llama_server/llama"` fails with `CHECK-IMPORT-IO: cannot resolve import`: imports resolve
   relative to the importing file's folder, so a runnable program sits at the repo root, or names the file with `../`
-  as `src/llama_server_web/api.agc` does. The diagnostic does not say what the path was resolved against.
+  as `src/llama_server_web/api.agc` does. Since Agentica 0.21.0 the diagnostic names the path it tried and the
+  `../` form.
 - **A defs-only `extern` block has to come after every block that has a resource or a struct**, in the same file
   (`CHECK-DECL-ORDER: structs, enums, type aliases and resources come before functions`), so the one-line `ggml`
   block had to move to the end of `src/llama_server/llama.agc` and cannot sit by the library it belongs to.

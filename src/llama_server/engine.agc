@@ -101,6 +101,7 @@ export def run(model: Llama.Model, config: EngineConfig, requests: Channel[GenRe
     scratch: Native.memory_pointer(Llama.PIECE_BYTES),
     config: config,
   )
+
   seqs: List[Seq] = []
   stats = Stats(steps: 0, rows: 0, decode_ns: 0, step_ns: 0, since_ms: Time.monotonic_ms())
   while true
@@ -124,6 +125,7 @@ def account(config: EngineConfig, stats: Stats, done: StepResult, step_ns: Int) 
     decode_ns: stats.decode_ns + done.decode_ns,
     step_ns: stats.step_ns + step_ns,
   )
+
   now = Time.monotonic_ms()
   if not config.stats or now - grown.since_ms < STATS_WINDOW_MS
     return grown
@@ -168,17 +170,19 @@ def start(engine: Engine, active: List[Seq], request: GenRequest) -> Result[Seq]
 
   case Llama.new_sampler(request.temperature, request.seed)
     ok(sampler) ->
-      return ok(Seq(
-        slot: free_slot(active),
-        request: request,
-        sampler: sampler,
-        limit: Numbers.smaller(request.max_tokens, per_seq - request.prompt.size),
-        pending: request.prompt,
-        pos: 0,
-        parts: [],
-        held: "".bytes,
-        generated: 0,
-      ))
+      return ok(
+        Seq(
+          slot: free_slot(active),
+          request: request,
+          sampler: sampler,
+          limit: Numbers.smaller(request.max_tokens, per_seq - request.prompt.size),
+          pending: request.prompt,
+          pos: 0,
+          parts: [],
+          held: "".bytes,
+          generated: 0,
+        ),
+      )
     error(message) ->
       refuse(request, message)
       return error("refused")
@@ -242,12 +246,14 @@ def items_of(feed: Feed) -> List[Llama.BatchItem]
   tokens = seq.pending.take(feed.fed)
   items: List[Llama.BatchItem] = []
   for i in 0...feed.fed
-    items = items.push(Llama.BatchItem(
-      token: tokens[i],
-      pos: seq.pos + i,
-      slot: seq.slot,
-      wants_logits: feed.row >= 0 and i == feed.fed - 1,
-    ))
+    items = items.push(
+      Llama.BatchItem(
+        token: tokens[i],
+        pos: seq.pos + i,
+        slot: seq.slot,
+        wants_logits: feed.row >= 0 and i == feed.fed - 1,
+      ),
+    )
   end
 
   return items
@@ -348,6 +354,7 @@ def finish(engine: Engine, seq: Seq, reason: String) -> Void
     finish_reason: reason,
     failure: "",
   )
+
   wait = REPLY_TIMEOUT_MS
   if seq.request.stream
     wait = 0

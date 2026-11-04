@@ -178,6 +178,7 @@ export def new_context(model: Model, n_ctx: Int, n_batch: Int, n_seq: Int, threa
     no_perf: true,
     kv_unified: false,
   )
+
   case llama_init_from_model(model, params)
     ok(ctx) -> return ok(ctx)
     error(_) -> return error("cannot create the context")
