@@ -14,7 +14,7 @@ agentica install
   a `native/` folder (see [gaps.md](gaps.md)).
 - [scripts/fetch-model.sh](../scripts/fetch-model.sh): Qwen2.5-0.5B-Instruct Q4_K_M, sha256-checked, into `deps/`. For
   any other public GGUF model on Hugging Face, pass the repo, the file and its sha256, for example
-  `scripts/fetch-model.sh Qwen/Qwen2.5-1.5B-Instruct-GGUF qwen2.5-1.5b-instruct-q4_k_m.gguf SHA256`, then run the
+  `scripts/fetch-model.sh Qwen/Qwen2.5-1.5B-Instruct-GGUF qwen2.5-1.5b-instruct-q4_k_m.gguf <sha256>`, then run the
   server with `--model deps/qwen2.5-1.5b-instruct-q4_k_m.gguf`.
 - [scripts/fetch-headers.sh](../scripts/fetch-headers.sh): `llama.h` of the same tag, only to compare the struct
   layouts in `src/llama_server/llama.agc`. The release archive ships no headers, so the struct layouts were copied from `llama.h` at
