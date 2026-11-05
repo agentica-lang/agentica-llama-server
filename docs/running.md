@@ -20,7 +20,7 @@ agentica install
   layouts in `src/llama_server/llama.agc`. The release archive ships no headers, so the struct layouts were copied from `llama.h` at
   tag `b12012`; a wrong field list is undefined behavior, so re-check them if you change the tag.
 - `agentica install`: Bond 0.6.1 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
-  `agentica.lock`; Bond 0.4.0 does not run on Agentica 0.23.0).
+  `agentica.lock`).
 
 Nothing under `deps/` is committed.
 
