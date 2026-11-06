@@ -1,6 +1,6 @@
 name = "agentica-llama-server"
 
-# Needs Agentica 0.24.1 or later (Bond 0.6.1 serves with `HTTP.serve`, which 0.4.0 predates).
+# Needs Agentica 0.24.4 or later (Bond 0.6.1 serves with `HTTP.serve`, which 0.4.0 predates).
 
 [style]
 blank_line_after_end = true
