@@ -169,7 +169,8 @@ def bench(servers, concurrencies, reps, max_tokens, max_load, patience_s, stream
             first = client.run(s.url, 1, 4, max_tokens, s.extra, keep_texts=True, stream=stream)
             second = client.run(s.url, 4, 4, max_tokens, s.extra, stream=stream)
             if first["failures"] or second["failures"]:
-                raise RuntimeError("%s: a warm-up request failed: %s" % (s.name, first.get("first_failure") or second.get("first_failure")))
+                why = first.get("first_failure") or second.get("first_failure")
+                raise RuntimeError("%s: a warm-up request failed: %s" % (s.name, why))
             results[s.name]["texts"] = first["texts"]
             results[s.name]["batched_same"] = None
             continue

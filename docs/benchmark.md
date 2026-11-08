@@ -3,8 +3,8 @@
 agentica-llama-server against `llama-server` of the same llama.cpp release (b12012), on the same model and settings,
 with and without streaming. The raw JSON of every run is in [bench/results/](../bench/results/): `threads4.json`,
 `threads8.json` (one JSON answer per request), `threads4-stream.json` (`stream: true`, with the time to first token) and
-`quick.json` (the run of under 3 minutes, streaming). Every rep is there, with the cores the neighbours used during it. The
-`threads8-stream` set was **not rerun** for this version (see below).
+`quick.json` (the run of under 3 minutes, streaming). Every rep is there, with the cores the neighbours used during it.
+The `threads8-stream` set was **not rerun** for this version (see below).
 
 Versions: Agentica 0.27.0, Bond 0.10.0, llama.cpp b12012. Full sets measured on 2026-11-08 and 2026-11-09, quick run on
 2026-11-09. The previous run (Agentica 0.19.0-beta.1, Bond 0.2.0, same llama.cpp) is kept in
@@ -46,9 +46,10 @@ role-only first chunk does not count. A stream gets a new connection per request
 `max_tokens` 64 nearly every answer ends at the limit, so the tok/s are comparable.)
 
 The recommended command is the **quick mode**: a whole run (both servers) in under 3 minutes on an idle machine (123 s
-measured, 140 s with `--threads 8`; 4 threads, `--stream` on, so the time to first token and the tok/s come from the same requests; 32 tokens per
-answer, 2 reps per cell, 4 prompts for the identity check, a short warm-up, one try per run). `--threads`, `--reps` and
-`--max-tokens` still win when you give them. The neighbour load is only recorded (it is not used to redo a run):
+measured with 4 threads; a one-off check with `--threads 8` took 140 s, its file was not kept). It has `--stream` on, so
+the time to first token and the tok/s come from the same requests; 32 tokens per answer, 2 reps per cell, 4 prompts for
+the identity check, a short warm-up, one try per run. `--threads`, `--reps` and `--max-tokens` still win when you give
+them. The neighbour load is only recorded (it is not used to redo a run):
 
 ```sh
 python3 bench/run_all.py --agentica /path/to/agentica --quick --max-load 1.5
