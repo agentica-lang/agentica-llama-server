@@ -3,7 +3,7 @@
 agentica-llama-server against `llama-server` of the same llama.cpp release (b12012), on the same model and settings,
 with and without streaming. The raw JSON of every run is in [bench/results/](../bench/results/): `threads4.json`,
 `threads8.json` (one JSON answer per request), `threads4-stream.json` (`stream: true`, with the time to first token) and
-`quick.json` (the 3-minute run, streaming). Every rep is there, with the cores the neighbours used during it. The
+`quick.json` (the run of under 3 minutes, streaming). Every rep is there, with the cores the neighbours used during it. The
 `threads8-stream` set was **not rerun** for this version (see below).
 
 Versions: Agentica 0.27.0, Bond 0.10.0, llama.cpp b12012. Full sets measured on 2026-11-08 and 2026-11-09, quick run on
@@ -28,15 +28,15 @@ was redone and none failed. Treat differences under about 10 % as noise.
 
 Both servers get the same model (Qwen2.5-0.5B-Instruct Q4_K_M), thread count (`-t` and `-tb`; 4 and 8 below), context
 (`-c 8192`), slots (`-np 8`, so 1024 tokens of KV per slot in both), batch sizes (`-b 2048 -ub 512`), greedy sampling
-(`temperature` 0) and `max_tokens` 64. The `llama-server` runs with `--no-webui --no-cache-prompt -cram 0` and every
+(`temperature` 0) and `max_tokens` 64 (32 in the quick mode). The `llama-server` runs with `--no-webui --no-cache-prompt -cram 0` and every
 request says `cache_prompt: false`, so it cannot skip the prompt work. Each server starts under
 `systemd-run --user --scope -q -p MemoryMax=6G -p MemorySwapMax=0 --` (a cap far above the 0.8 GB they use, so it does
 not touch the timing) and is stopped by the PID the script started.
 
-`bench/client.py` is closed-loop: N threads send requests back to back (16 requests at concurrency 1 and 4, 64 at
-concurrency 16). Eight different prompts rotate; the system prompt is explicit so both chat templates give the same
-prompt (about 28 prompt tokens per request). After a warm-up, each concurrency runs 3 times per server, **alternating
-the servers rep by rep**, and the tables show medians of the 3.
+`bench/client.py` is closed-loop: N threads send requests back to back (full mode: 16 requests at concurrency 1 and 4,
+64 at concurrency 16; quick mode: 4, 8 and 16). Eight different prompts rotate; the system prompt is explicit so both
+chat templates give the same prompt (about 28 prompt tokens per request). After a warm-up, each concurrency runs 3 times
+per server (2 in the quick mode), **alternating the servers rep by rep**, and the full tables show medians of the 3.
 
 With `--stream` every request says `"stream": true` and `stream_options.include_usage` (both servers accept it) and the
 client records the time to first token (TTFT): the time until the first event whose `delta.content` is not empty. The
@@ -45,15 +45,16 @@ role-only first chunk does not count. A stream gets a new connection per request
 (`llama-server` counts the end-of-answer token in `completion_tokens`, agentica-llama-server does not; with
 `max_tokens` 64 nearly every answer ends at the limit, so the tok/s are comparable.)
 
-The default command is the **quick mode**, a whole run (both servers) in about 2 minutes (123 s measured, 4 threads,
-`--stream` on, so the time to first token and the tok/s come from the same requests; 32 tokens per answer, 2 reps per
-cell, 4, 8 and 16 requests at concurrency 1, 4 and 16, 4 prompts for the identity check, a short warm-up):
+The recommended command is the **quick mode**: a whole run (both servers) in under 3 minutes on an idle machine (123 s
+measured, 140 s with `--threads 8`; 4 threads, `--stream` on, so the time to first token and the tok/s come from the same requests; 32 tokens per
+answer, 2 reps per cell, 4 prompts for the identity check, a short warm-up, one try per run). `--threads`, `--reps` and
+`--max-tokens` still win when you give them. The neighbour load is only recorded (it is not used to redo a run):
 
 ```sh
-python3 bench/run_all.py --agentica /path/to/agentica --quick --max-load 1.5 --max-load-during 1.2
+python3 bench/run_all.py --agentica /path/to/agentica --quick --max-load 1.5
 ```
 
-The full mode (25 to 30 minutes per set) is the one that has 3 reps, `max_tokens` 64, more requests and a batched
+The full mode (about 20 minutes per set) is the one that has 3 reps, `max_tokens` 64, more requests and a batched
 identity check; the full tables below come from it:
 
 ```sh
@@ -91,10 +92,11 @@ reps are 44.7, 44.3, 43.9 against 38.0, 37.5, 37.4).
 | llama-server | 16 | 0.57 | 36.3 | 28.20 | 31.24 |
 
 Ratios of tok/s: 0.91, 1.13, 0.99 (1.01, 1.15, 1.00 on 0.19.0-beta.1). The concurrency 1 cell is the only one where
-agentica-llama-server is behind: its reps are 28.9, 24.8, 27.7 against 30.7, 30.3, 29.8, so one slow rep makes most of
-the gap and I would not call it a loss. The concurrency 4 gap is there again (36.4, 37.0, 37.3 against 32.6, 32.5,
-33.2), now with both thread counts. I do not know why, and I would not call it a win without a look at `llama-server`'s
-scheduling.
+agentica-llama-server is behind, and it is a real gap: all three agentica-llama-server reps (24.8 to 28.9) are below all
+three `llama-server` reps (29.8 to 30.7), the median is 9 % lower and the p50 latency 12 % worse (2.32 against 2.07 s).
+It is not there with 4 threads (1.01), and I do not know why. The concurrency 4 gap is there again (36.4, 37.0, 37.3
+against 32.6, 32.5, 33.2), now with both thread counts; I do not know why either, and I would not call it a win without
+a look at `llama-server`'s scheduling.
 
 No request failed in any run. (The latency at concurrency 16 is mostly queueing: 16 clients for 8 slots.)
 
@@ -114,16 +116,16 @@ Medians of 3 runs. TTFT is the time to the first content token; total latency is
 | llama-server | 16 | 40.8 | 14.15 | 16.20 | 25.32 | 27.37 |
 
 Ratios of tok/s: 1.03, 1.11, 0.99. Ratios of TTFT p50: 0.96, 1.07, 0.98 (a ratio over 1 is slower). On 0.19.0-beta.1 the
-tok/s ratios were 0.98, 1.10, 1.21 and the TTFT ratios 1.02, 1.05, 0.85, but those concurrency 16 rows were noisy; this
+tok/s ratios were 0.98, 1.10, 1.20 and the TTFT ratios 1.02, 1.05, 0.85, but those concurrency 16 rows were noisy; this
 time the machine was quiet and concurrency 16 is the same on both. The concurrency 4 gap in tok/s is there again (one
 agentica-llama-server rep is 38.3 against 43.5 and 44.3), while its TTFT is a little higher (1.45 against 1.36 s), so
 read it as "the same, within noise".
 
 ### 8 threads
 
-Not rerun for 0.27.0. The full sets took 25 to 30 minutes each, and a benchmark run now has to take at most
+Not rerun for 0.27.0. The full sets took about 20 minutes each, and a benchmark run now has to take at most
 3 minutes, so the 8-thread streaming set was stopped before it finished and its partial output was dropped. The
-0.19.0-beta.1 result is in `bench/results/0.19.0-beta.1/threads8-stream.json` (capped CPU: ratios of tok/s 0.99, 1.20,
+0.19.0-beta.1 result is in `bench/results/0.19.0-beta.1/threads8-stream.json` (capped CPU: ratios of tok/s 0.99, 1.19,
 0.99, TTFT at concurrency 1 equal at 0.67 s). The 8-thread plain set above is the 0.27.0 result for 8 threads.
 
 ### Quick run (3 minutes, 4 threads, streaming)
@@ -182,11 +184,12 @@ bench/client.py --url URL --concurrency N --requests 3000 --health` for each ser
 
 ## An honest reading
 
-- **Parity, not a win.** Without streaming, agentica-llama-server is within 5 % of `llama-server` in 4 of 6 cells, ahead
-  by 13 to 18 % at concurrency 4 (both thread counts) and 9 % behind at 8 threads, concurrency 1 (one slow rep). With
-  streaming the same, and the quick run, which has less data, shows parity in every cell. The concurrency 4 gap shows
-  in 3 of 3 full sets and in none of the quick run, so I do not trust it.
-- **Streaming is free here.** At concurrency 1 the tok/s and the total latency with `stream: true` are within about 5 %
+- **Parity, not a win.** Without streaming, agentica-llama-server is within 5 % of `llama-server` in 3 of 6 cells
+  (4 threads: 1 and 16; 8 threads: 16), ahead by 13 to 18 % at concurrency 4 (both thread counts) and about 9 % behind at
+  8 threads, concurrency 1 (every rep behind every rep of `llama-server`; not there with 4 threads). With streaming the
+  same, and the quick run, which has less data, shows parity in every cell. The concurrency 4 gap shows in 3 of 3 full
+  sets and in none of the quick run, so I do not trust it.
+- **Streaming is free here.** At concurrency 1 the tok/s and the total latency with `stream: true` are within about 6 %
   of the plain runs on both servers. The time to first token at concurrency 1 is 0.3 s on both (one prefill of about 28
   tokens plus the first decode step, at full CPU speed; it was 0.6 to 0.7 s at the 1.4 GHz cap). It is the same on the
   two servers, so Agentica's layers (the route, the channel, the pump, Bond's SSE, `std/http`) add nothing visible to it.
@@ -203,10 +206,10 @@ bench/client.py --url URL --concurrency N --requests 3000 --health` for each ser
 - **The HTTP layer is not the bottleneck either**: `/health` was about 30 % slower per request at concurrency 1 (0.52
   against 0.34 ms p50, 0.19.0-beta.1, not rerun) and on par at concurrency 16, when inference gives 0.6 requests per
   second.
-- **Memory:** about 110 MB more at idle and about 140 MB more at peak than `llama-server` (the Agentica VM, the Bond app,
-  and the batch/scratch buffers); on 0.19.0-beta.1 it was 20 and 95 MB. Streaming adds nothing visible. The idle number
-  is higher in the plain set (768 MB) than in the streaming one (701 MB), so it moves by about 70 MB between starts; I
-  did not look into why.
+- **Memory:** the gap to `llama-server` changes from run to run: +41 to +108 MB at idle and +70 to +141 MB at peak (the
+  plain 4-thread set is the high end; the Agentica VM, the Bond app, and the batch/scratch buffers). On 0.19.0-beta.1 it
+  was +20 and +95 MB. Streaming adds nothing visible. The idle number of agentica-llama-server is 768 MB in the plain
+  4-thread set and 701 MB in the streaming ones, so it moves by about 70 MB between starts; I did not look into why.
 - Not measured: long prompts (prefill), sampling with temperature (the C sampler is the same code in both, but the
   sampler chain here is only `temp` then `dist`, not `llama-server`'s default `top-k`/`top-p`/`min-p`), a client that
   leaves mid-stream under load, and any GPU build.

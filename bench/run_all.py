@@ -166,8 +166,11 @@ def bench(servers, concurrencies, reps, max_tokens, max_load, patience_s, stream
     for s in servers:
         if quick:
             # Weights paged in, buffers sized; the 4 answers also serve as the identity check.
-            results[s.name]["texts"] = client.run(s.url, 1, 4, max_tokens, s.extra, keep_texts=True, stream=stream)["texts"]
-            client.run(s.url, 4, 4, max_tokens, s.extra, stream=stream)
+            first = client.run(s.url, 1, 4, max_tokens, s.extra, keep_texts=True, stream=stream)
+            second = client.run(s.url, 4, 4, max_tokens, s.extra, stream=stream)
+            if first["failures"] or second["failures"]:
+                raise RuntimeError("%s: a warm-up request failed: %s" % (s.name, first.get("first_failure") or second.get("first_failure")))
+            results[s.name]["texts"] = first["texts"]
             results[s.name]["batched_same"] = None
             continue
         client.run(s.url, 4, 16, max_tokens, s.extra, stream=stream)  # warm-up: weights paged in, buffers sized
@@ -177,7 +180,7 @@ def bench(servers, concurrencies, reps, max_tokens, max_load, patience_s, stream
         # The same prompts decoded side by side must give the same greedy answers as one at a time.
         results[s.name]["batched_same"] = sum(1 for k, v in results[s.name]["texts"].items() if batched.get(k) == v)
     for c in concurrencies:
-        total = min(16, max(4, 2 * c)) if quick else max(16, 4 * c)
+        total = max(c, min(16, max(4, 2 * c))) if quick else max(16, 4 * c)
         for s in servers:
             results[s.name]["runs"][c] = []
         for rep in range(reps):
@@ -244,12 +247,12 @@ def main():
     parser.add_argument("--agentica", default="agentica")
     parser.add_argument("--only", choices=["agentica", "llama-server"])
     parser.add_argument("--order", default="agentica,llama-server")
-    parser.add_argument("--threads", type=int, default=os.cpu_count())
+    parser.add_argument("--threads", type=int, default=None, help="default: nproc (4 with --quick)")
     parser.add_argument("--ctx", type=int, default=8192)
     parser.add_argument("--slots", type=int, default=8)
     parser.add_argument("--concurrency", default="1,4,16")
-    parser.add_argument("--reps", type=int, default=3)
-    parser.add_argument("--max-tokens", type=int, default=64)
+    parser.add_argument("--reps", type=int, default=None, help="default: 3 (2 with --quick)")
+    parser.add_argument("--max-tokens", type=int, default=None, help="default: 64 (32 with --quick)")
     parser.add_argument("--max-load", type=float, default=1e9, help="wait until the neighbours use fewer cores than this")
     parser.add_argument("--patience", type=int, default=600, help="seconds to wait for a quiet machine per run")
     parser.add_argument("--max-load-during", type=float, default=1e9,
@@ -259,15 +262,14 @@ def main():
     parser.add_argument("--port", type=int, default=8123)
     parser.add_argument("--out", default=os.path.join(ROOT, "bench", "results", "latest.json"))
     args = parser.parse_args()
+    # An explicit value always wins; only an omitted one takes the default of its mode.
+    if args.threads is None:
+        args.threads = 4 if args.quick else os.cpu_count()
+    if args.max_tokens is None:
+        args.max_tokens = 32 if args.quick else 64
+    if args.reps is None:
+        args.reps = 2 if args.quick else 3
     if args.quick:
-        # Only what was left at its default changes, so `--quick --threads 8` still works.
-        defaults = parser.parse_args([])
-        if args.threads == defaults.threads:
-            args.threads = 4
-        if args.max_tokens == defaults.max_tokens:
-            args.max_tokens = 32
-        if args.reps == defaults.reps:
-            args.reps = 2
         args.stream = True
         args.patience = min(args.patience, 10)
         args.attempts = 1
@@ -289,8 +291,8 @@ def main():
             s.stop()
     with open(args.out, "w") as f:
         json.dump({"threads": args.threads, "ctx": args.ctx, "slots": args.slots, "max_tokens": args.max_tokens,
-                   "stream": args.stream, "quick": args.quick, "max_load": args.max_load, "max_load_during": args.max_load_during,
-                   "results": results}, f, indent=1)
+                   "reps": args.reps, "stream": args.stream, "quick": args.quick, "max_load": args.max_load,
+                   "max_load_during": args.max_load_during, "results": results}, f, indent=1)
     print(table(results))
 
 
