@@ -1,8 +1,7 @@
 # Gaps found in Agentica, Bond and the FFI
 
-Each is a short bullet with a repro. Rechecked with Agentica 0.23.0 and still failing: `Int` `min`/`max`, `case` as an
-expression, the entry file in a subfolder, the `[native]` file path and the order of a defs-only `extern` block. The
-callback and bulk write limits are as the 0.23.0 reference states them; the other repros were not rerun.
+Each is a short bullet with a repro. Rechecked with Agentica 0.23.0 and still failing: `Int` `min`/`max`, the entry file in a subfolder, the
+`[native]` file path and the order of a defs-only `extern` block. The callback and bulk write limits are as the 0.23.0 reference states them; the other repros were not rerun.
 
 Closed since the first version:
 
@@ -10,6 +9,9 @@ Closed since the first version:
   it still lacks (limits of an `Int`, the help layout, `on`/`off` values) is agentica-lang/agentica#1048.
 - Bond had no streaming body (Bond 0.2.0 has `Bond.stream` and `Bond.sse`) and `Bond.json` encoded a struct twice
   (Bond 0.2.0 has `Bond.json_as` with a codec).
+- `case` was not an expression: since Agentica 0.25.0 it gives a value on the right of an assignment, after `return` and as
+  the last line of a block (`x = case r ... end`). The engine and the routes still use `case` statements that return in
+  each arm.
 - No hex literals: `0x80` works since Agentica 0.19.0. `utf8_complete` (`src/llama_server/engine.agc`) still writes `128`, `192`,
   `224` and `240`.
 - A channel could not say "the reader left" without a send: since Agentica 0.20.0 `closed?` is `true` as soon as the
@@ -40,9 +42,6 @@ Closed since the first version:
 - **A defs-only `extern` block has to come after every block that has a resource or a struct**, in the same file
   (`CHECK-DECL-ORDER: structs, enums, type aliases and resources come before functions`), so the one-line `ggml`
   block had to move to the end of `src/llama_server/llama.agc` and cannot sit by the library it belongs to.
-- **`case` is not an expression.** `x = case r ... ok(n) -> n ... end` is `PARSE-UNEXPECTED-TOKEN: expected an
-  expression, found "case"`, so unwrapping a `Result` with a fallback takes a `case` statement that assigns in each arm
-  (and `try` only works in a function that returns a `Result`).
 - **No bulk write of a small-int list into native memory.** Only `put_array_of_int32/int64/float32/float64`
   exist; the `int8` `logits` array of `llama_batch` goes through `Bytes.from_list` and `put_bytes`, and the
   `seq_id` pointer-to-int cells need a `get_pointer` and a `put_int32` per token.
