@@ -1,0 +1,17 @@
+123 s wall (usr/bin/time), 0.27.0
+| server | conc | req/s | gen tok/s | p50 s | p95 s | ttft p50 s | ttft p95 s | failed |
+|---|---|---|---|---|---|---|---|---|
+| agentica | 1 | 1.02 | 32.5 | 0.98 | 1.02 | 0.29 | 0.31 | 0 |
+| agentica | 4 | 1.19 | 38.2 | 3.36 | 3.38 | 1.08 | 1.27 | 0 |
+| agentica | 16 | 1.20 | 38.3 | 10.04 | 13.37 | 4.50 | 9.08 | 0 |
+| llama-server | 1 | 0.97 | 30.9 | 1.04 | 1.06 | 0.30 | 0.35 | 0 |
+| llama-server | 4 | 1.23 | 39.3 | 3.25 | 3.30 | 1.15 | 1.18 | 0 |
+| llama-server | 16 | 1.22 | 39.1 | 9.81 | 13.08 | 4.49 | 8.82 | 0 |
+
+| server | RSS idle MB | RSS peak MB | RSS end MB |
+|---|---|---|---|
+| agentica | 701 | 776 | 776 |
+| llama-server | 660 | 693 | 693 |
+
+
+Greedy answers identical between servers: 4 of 4 prompts.

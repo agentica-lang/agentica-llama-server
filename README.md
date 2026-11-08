@@ -35,9 +35,11 @@ reverse.
 
 ## Benchmark
 
-On a 4-core laptop CPU (capped at 1.4 GHz) with Qwen2.5-0.5B, it is at parity with `llama-server` of the same llama.cpp
-release, streaming or not (not a win): the model dominates. Most cells are within 3 %; the time to first token is 0.6 to
-0.7 s on both at concurrency 1. Caveats and the cells that are noisy or ahead: [docs/benchmark.md](docs/benchmark.md).
+On a 4-core laptop CPU (not capped) with Qwen2.5-0.5B, it is at parity with `llama-server` of the same llama.cpp
+release, streaming or not (not a win): the model dominates. About 28 to 44 tok/s on both; the time to first token is
+0.3 s on both at concurrency 1. At concurrency 4 it was 11 to 18 % ahead in the full sets but not in the 3-minute quick
+run (`bench/run_all.py --quick`); at 8 threads and concurrency 1 it was about 9 % behind. The CPU cap is gone, so only
+the ratios compare with older runs. Caveats: [docs/benchmark.md](docs/benchmark.md).
 
 ## Docs
 
