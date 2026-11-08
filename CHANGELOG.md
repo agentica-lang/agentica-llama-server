@@ -4,6 +4,10 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** needs Agentica 0.27.0 or later and Bond 0.10.0. The request and response codecs are `ChatRequest.codec` and `ChatResponse.codec`.
+
 ## [0.1.0] - 2026-11-05
 
 First release: a prototype LLM inference server, the Bond web framework in front of llama.cpp, called through the Agentica FFI.

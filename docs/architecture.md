@@ -1,7 +1,7 @@
 # Architecture
 
 The [Bond](https://github.com/agentica-lang/bond) web framework in front of llama.cpp, called through the Agentica FFI
-(no C code). Tested with Agentica 0.24.4 (CI) and Bond 0.6.1.
+(no C code). Tested with Agentica 0.27.0 (CI) and Bond 0.10.0.
 
 ## How it works
 
@@ -15,7 +15,7 @@ The [Bond](https://github.com/agentica-lang/bond) web framework in front of llam
   next waiting request in the next step.
 - [src/llama_server_web/api.agc](../src/llama_server_web/api.agc), [server.agc](../server.agc): Bond routes `POST /v1/chat/completions` (OpenAI shape:
   `messages`, `max_tokens`, `temperature`, `seed`, `stream`, `stream_options.include_usage`) and `GET /health`.
-  A plain request is answered with `Bond.json_as(conn, 200, JSON.codec(ChatResponse), response)`.
+  A plain request is answered with `Bond.json_as(conn, 200, ChatResponse.codec, response)`.
 
 ## The streaming path
 
