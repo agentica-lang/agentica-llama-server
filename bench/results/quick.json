@@ -1,0 +1,268 @@
+{
+ "threads": 4,
+ "ctx": 8192,
+ "slots": 8,
+ "max_tokens": 32,
+ "stream": true,
+ "quick": true,
+ "max_load": 1.5,
+ "max_load_during": 1.2,
+ "results": {
+  "agentica": {
+   "runs": {
+    "1": [
+     {
+      "concurrency": 1,
+      "requests": 4,
+      "failures": 0,
+      "wall_s": 3.817930268938653,
+      "req_per_s": 1.0476880713465624,
+      "gen_tok_per_s": 33.526018283089996,
+      "completion_tokens": 128,
+      "prompt_tokens": 112,
+      "p50_s": 0.9522606990067288,
+      "p95_s": 0.9660022817843128,
+      "ttft_p50_s": 0.27281270950334147,
+      "ttft_p95_s": 0.29645946016535163,
+      "neighbour_cores_during": 0.1741424802110818,
+      "busy_cores_before": 0.23144654088050315,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 1,
+      "requests": 4,
+      "failures": 0,
+      "wall_s": 4.05483571102377,
+      "req_per_s": 0.9864764654028547,
+      "gen_tok_per_s": 31.56724689289135,
+      "completion_tokens": 128,
+      "prompt_tokens": 112,
+      "p50_s": 1.002449657942634,
+      "p95_s": 1.0646450764324982,
+      "ttft_p50_s": 0.3115952084772289,
+      "ttft_p95_s": 0.3278149069636129,
+      "neighbour_cores_during": 0.25886745488487867,
+      "busy_cores_before": 0.3838383838383838,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "4": [
+     {
+      "concurrency": 4,
+      "requests": 8,
+      "failures": 0,
+      "wall_s": 6.471722869086079,
+      "req_per_s": 1.236146874924782,
+      "gen_tok_per_s": 39.55669999759302,
+      "completion_tokens": 256,
+      "prompt_tokens": 222,
+      "p50_s": 3.235394225514028,
+      "p95_s": 3.2461952796555122,
+      "ttft_p50_s": 1.1489154764567502,
+      "ttft_p95_s": 1.183956288039917,
+      "neighbour_cores_during": 0.2518460940536339,
+      "busy_cores_before": 0.1712846347607053,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 4,
+      "requests": 8,
+      "failures": 0,
+      "wall_s": 6.959174035000615,
+      "req_per_s": 1.1495617094449189,
+      "gen_tok_per_s": 36.785974702237404,
+      "completion_tokens": 256,
+      "prompt_tokens": 222,
+      "p50_s": 3.479111112479586,
+      "p95_s": 3.5055371701309923,
+      "ttft_p50_s": 1.0068389515508898,
+      "ttft_p95_s": 1.3652054935344495,
+      "neighbour_cores_during": 0.3271214040166456,
+      "busy_cores_before": 0.181360201511335,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "16": [
+     {
+      "concurrency": 16,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 13.354559683939442,
+      "req_per_s": 1.1980926648777523,
+      "gen_tok_per_s": 38.338965276088075,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 10.122608800476883,
+      "p95_s": 13.347048699768493,
+      "ttft_p50_s": 4.617738265485968,
+      "ttft_p95_s": 9.110408612235915,
+      "neighbour_cores_during": 0.30922599454528354,
+      "busy_cores_before": 0.24120603015075376,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 16,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 13.396818664041348,
+      "req_per_s": 1.1943133964294002,
+      "gen_tok_per_s": 38.218028685740805,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 9.95224930148106,
+      "p95_s": 13.388965695980005,
+      "ttft_p50_s": 4.386900470475666,
+      "ttft_p95_s": 9.054087990545668,
+      "neighbour_cores_during": 0.24508974720421012,
+      "busy_cores_before": 0.21026282853566958,
+      "attempts": 1,
+      "discarded": []
+     }
+    ]
+   },
+   "rss_idle_mb": 700.921875,
+   "texts": {
+    "0": "A hash table is a data structure that allows for efficient storage and retrieval of data. It works by using a hash function to map each key to a unique index",
+    "1": "The lighthouse keeper stood at his desk, his eyes fixed on the sea. He had been working at the lighthouse for years, and he had seen many",
+    "2": "The French Revolution was a period of political upheaval and social change that began in 1789 and lasted until 1799. The main",
+    "3": "The water cycle is a continuous process that involves the movement of water on, above, and below the surface of the Earth. It is a crucial part of the"
+   },
+   "batched_same": null,
+   "rss_peak_mb": 776.0625,
+   "rss_end_mb": 776.0625
+  },
+  "llama-server": {
+   "runs": {
+    "1": [
+     {
+      "concurrency": 1,
+      "requests": 4,
+      "failures": 0,
+      "wall_s": 4.095021783025004,
+      "req_per_s": 0.9767957808139396,
+      "gen_tok_per_s": 31.257464986046067,
+      "completion_tokens": 128,
+      "prompt_tokens": 112,
+      "p50_s": 1.0320468275458552,
+      "p95_s": 1.0514985598507338,
+      "ttft_p50_s": 0.28842862049350515,
+      "ttft_p95_s": 0.3606220253102947,
+      "neighbour_cores_during": 0.26370918052988296,
+      "busy_cores_before": 0.37373737373737376,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 1,
+      "requests": 4,
+      "failures": 0,
+      "wall_s": 4.195165202021599,
+      "req_per_s": 0.9534785419349991,
+      "gen_tok_per_s": 30.511313341919973,
+      "completion_tokens": 128,
+      "prompt_tokens": 112,
+      "p50_s": 1.0505573694827035,
+      "p95_s": 1.0626098282868042,
+      "ttft_p50_s": 0.3084415150224231,
+      "ttft_p95_s": 0.33498643308412285,
+      "neighbour_cores_during": 0.27553159628631324,
+      "busy_cores_before": 0.3224181360201511,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "4": [
+     {
+      "concurrency": 4,
+      "requests": 8,
+      "failures": 0,
+      "wall_s": 6.530004840926267,
+      "req_per_s": 1.2251139462961282,
+      "gen_tok_per_s": 39.203646281476104,
+      "completion_tokens": 256,
+      "prompt_tokens": 222,
+      "p50_s": 3.2469651120482013,
+      "p95_s": 3.282396978914039,
+      "ttft_p50_s": 1.1940811344538815,
+      "ttft_p95_s": 1.2189240663778036,
+      "neighbour_cores_during": 0.21263482280431434,
+      "busy_cores_before": 0.23115577889447236,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 4,
+      "requests": 8,
+      "failures": 0,
+      "wall_s": 6.502326403046027,
+      "req_per_s": 1.2303288860202997,
+      "gen_tok_per_s": 39.37052435264959,
+      "completion_tokens": 256,
+      "prompt_tokens": 222,
+      "p50_s": 3.2503575020236894,
+      "p95_s": 3.3124114955193362,
+      "ttft_p50_s": 1.11120901000686,
+      "ttft_p95_s": 1.1334094555757475,
+      "neighbour_cores_during": 0.17994958309094436,
+      "busy_cores_before": 0.31512071156289706,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "16": [
+     {
+      "concurrency": 16,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 13.273300384054892,
+      "req_per_s": 1.2054274021569398,
+      "gen_tok_per_s": 38.57367686902207,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 9.949928654008545,
+      "p95_s": 13.265988502447726,
+      "ttft_p50_s": 4.546350903983694,
+      "ttft_p95_s": 8.937177158688428,
+      "neighbour_cores_during": 0.23911187019641333,
+      "busy_cores_before": 0.1610062893081761,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 16,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 12.91097822599113,
+      "req_per_s": 1.2392554398233242,
+      "gen_tok_per_s": 39.656174074346374,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 9.676468536490574,
+      "p95_s": 12.903042844205629,
+      "ttft_p50_s": 4.428202092007268,
+      "ttft_p95_s": 8.705231578322127,
+      "neighbour_cores_during": 0.22832651470874732,
+      "busy_cores_before": 0.5226130653266332,
+      "attempts": 1,
+      "discarded": []
+     }
+    ]
+   },
+   "rss_idle_mb": 660.0390625,
+   "texts": {
+    "0": "A hash table is a data structure that allows for efficient storage and retrieval of data. It works by using a hash function to map each key to a unique index",
+    "1": "The lighthouse keeper stood at his desk, his eyes fixed on the sea. He had been working at the lighthouse for years, and he had seen many",
+    "2": "The French Revolution was a period of political upheaval and social change that began in 1789 and lasted until 1799. The main",
+    "3": "The water cycle is a continuous process that involves the movement of water on, above, and below the surface of the Earth. It is a crucial part of the"
+   },
+   "batched_same": null,
+   "rss_peak_mb": 693.2421875,
+   "rss_end_mb": 693.2421875
+  }
+ }
+}

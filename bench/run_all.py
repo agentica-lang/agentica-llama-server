@@ -140,25 +140,36 @@ def run_measured(server, concurrency, total, max_tokens, stream):
     return result
 
 
-def wait_quiet(max_busy, patience_s):
+def wait_quiet(max_busy, patience_s, window_s=4.0):
     """Waits until the neighbours use fewer than `max_busy` cores, at most `patience_s`.
 
     The machine is shared: a busy neighbour stalls the spinning threads of ggml, so a run is only comparable on a
     quiet machine. The busy cores are recorded with every run, quiet or not.
     """
     deadline = time.time() + patience_s
-    busy = busy_cores()
+    busy = busy_cores(window_s)
     while busy > max_busy and time.time() < deadline:
-        busy = busy_cores()
+        busy = busy_cores(window_s)
     return busy
 
 
-def bench(servers, concurrencies, reps, max_tokens, max_load, patience_s, stream=False, max_during=1e9, attempts=1):
-    """Runs the servers alternately, rep by rep, so a noisy machine hurts both the same."""
+def bench(servers, concurrencies, reps, max_tokens, max_load, patience_s, stream=False, max_during=1e9, attempts=1,
+          quick=False):
+    """Runs the servers alternately, rep by rep, so a noisy machine hurts both the same.
+
+    `quick` keeps the run under 3 minutes: a short warm-up, 4 prompts for the identity check, no batched check, a
+    1 s window for the neighbour check and fewer requests per run.
+    """
     for s in servers:
         wait_ready(s.port, s.proc)
     results = {s.name: {"runs": {}, "rss_idle_mb": rss_kb(s.pid, "VmRSS") / 1024} for s in servers}
     for s in servers:
+        if quick:
+            # Weights paged in, buffers sized; the 4 answers also serve as the identity check.
+            results[s.name]["texts"] = client.run(s.url, 1, 4, max_tokens, s.extra, keep_texts=True, stream=stream)["texts"]
+            client.run(s.url, 4, 4, max_tokens, s.extra, stream=stream)
+            results[s.name]["batched_same"] = None
+            continue
         client.run(s.url, 4, 16, max_tokens, s.extra, stream=stream)  # warm-up: weights paged in, buffers sized
         client.run(s.url, 1, 2, max_tokens, s.extra, stream=stream)
         results[s.name]["texts"] = client.run(s.url, 1, 8, max_tokens, s.extra, keep_texts=True, stream=stream)["texts"]
@@ -166,7 +177,7 @@ def bench(servers, concurrencies, reps, max_tokens, max_load, patience_s, stream
         # The same prompts decoded side by side must give the same greedy answers as one at a time.
         results[s.name]["batched_same"] = sum(1 for k, v in results[s.name]["texts"].items() if batched.get(k) == v)
     for c in concurrencies:
-        total = max(16, 4 * c)
+        total = min(16, max(4, 2 * c)) if quick else max(16, 4 * c)
         for s in servers:
             results[s.name]["runs"][c] = []
         for rep in range(reps):
@@ -176,7 +187,7 @@ def bench(servers, concurrencies, reps, max_tokens, max_load, patience_s, stream
                 # `attempts` times; then the quietest attempt stays. The thrown-away ones are kept in the JSON.
                 tried = []
                 for attempt in range(attempts):
-                    before = wait_quiet(max_load, patience_s)
+                    before = wait_quiet(max_load, patience_s, 1.0 if quick else 4.0)
                     r = run_measured(s, c, total, max_tokens, stream)
                     r["busy_cores_before"] = before
                     tried.append(r)
@@ -217,7 +228,7 @@ def table(results):
     for name, data in results.items():
         lines.append("| %s | %.0f | %.0f | %.0f |" % (name, data["rss_idle_mb"], data["rss_peak_mb"], data["rss_end_mb"]))
     lines += [""] + ["%s: %d of 8 answers at concurrency 8 equal the ones at concurrency 1."
-                     % (n, d["batched_same"]) for n, d in results.items()]
+                     % (n, d["batched_same"]) for n, d in results.items() if d["batched_same"] is not None]
     names = list(results)
     if len(names) == 2:
         a, b = (results[n]["texts"] for n in names)
@@ -228,6 +239,8 @@ def table(results):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--quick", action="store_true",
+                        help="a whole run in under 3 minutes: 4 threads, streaming, 32 tokens, 2 reps, fewer requests")
     parser.add_argument("--agentica", default="agentica")
     parser.add_argument("--only", choices=["agentica", "llama-server"])
     parser.add_argument("--order", default="agentica,llama-server")
@@ -246,6 +259,18 @@ def main():
     parser.add_argument("--port", type=int, default=8123)
     parser.add_argument("--out", default=os.path.join(ROOT, "bench", "results", "latest.json"))
     args = parser.parse_args()
+    if args.quick:
+        # Only what was left at its default changes, so `--quick --threads 8` still works.
+        defaults = parser.parse_args([])
+        if args.threads == defaults.threads:
+            args.threads = 4
+        if args.max_tokens == defaults.max_tokens:
+            args.max_tokens = 32
+        if args.reps == defaults.reps:
+            args.reps = 2
+        args.stream = True
+        args.patience = min(args.patience, 10)
+        args.attempts = 1
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     concurrencies = [int(c) for c in args.concurrency.split(",")]
     log_dir = os.path.dirname(args.out)
@@ -258,13 +283,13 @@ def main():
             cmd, env = commands(args.agentica, port, args.threads, args.ctx, args.slots)[name]
             servers.append(Server(name, cmd, env, port, log_dir))
         results = bench(servers, concurrencies, args.reps, args.max_tokens, args.max_load, args.patience, args.stream,
-                        args.max_load_during, args.attempts)
+                        args.max_load_during, args.attempts, args.quick)
     finally:
         for s in servers:
             s.stop()
     with open(args.out, "w") as f:
         json.dump({"threads": args.threads, "ctx": args.ctx, "slots": args.slots, "max_tokens": args.max_tokens,
-                   "stream": args.stream, "max_load": args.max_load, "max_load_during": args.max_load_during,
+                   "stream": args.stream, "quick": args.quick, "max_load": args.max_load, "max_load_during": args.max_load_during,
                    "results": results}, f, indent=1)
     print(table(results))
 
