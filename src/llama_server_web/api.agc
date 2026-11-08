@@ -114,7 +114,7 @@ def health(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
-  body = try Bond.json_body(conn, JSON.codec(ChatRequest))
+  body = try Bond.json_body(conn, ChatRequest.codec)
   if body.messages.empty?
     return Bond.bad_request("messages must not be empty")
   end
@@ -193,7 +193,7 @@ def respond(api: Api, conn: Bond.Conn, result: Engines.GenResult) -> Bond.Conn
     ),
   )
 
-  return Bond.json_as(conn, 200, JSON.codec(ChatResponse), response)
+  return Bond.json_as(conn, 200, ChatResponse.codec, response)
 end
 
 # Waits for the first piece, so a request the engine refuses is still a 400 (the head of a stream cannot be
