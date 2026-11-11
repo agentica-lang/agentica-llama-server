@@ -19,7 +19,7 @@ end
 ## `OP.run!`, which prints the help or the message and exits.
 export def parse(args: List[String]) -> Result[Options]
   parsed = try OP.parse(parser(), args)
-  return ok(
+  ok(
     Options(
       model: OP.string(parsed, "model"),
       backends: OP.string(parsed, "backends"),
@@ -35,7 +35,7 @@ export def parse(args: List[String]) -> Result[Options]
 end
 
 def parser() -> OP.Parser
-  return OP.new(
+  OP.new(
     "agentica server.agc",
     "An OpenAI-shaped chat server on llama.cpp",
     [],

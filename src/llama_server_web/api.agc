@@ -98,31 +98,25 @@ end
 ## `n_ctx` bounds how many pieces a stream can hold, so the engine never waits for a slow reader.
 export def new_api(model: Llama.Model, requests: Channel[Engines.GenRequest], model_name: String, n_ctx: Int) -> Api
   counters: ATS[String, Int] = ATS.new()
-  return Api(model: model, requests: requests, counters: counters, model_name: model_name, n_ctx: n_ctx)
+  Api(model: model, requests: requests, counters: counters, model_name: model_name, n_ctx: n_ctx)
 end
 
 export def app(api: Api) -> Bond.App
-  return (
+  (
     Bond.app()
     |> Bond.get("/health", &health)
     |> Bond.post("/v1/chat/completions") do |conn| chat(api, conn) end
   )
 end
 
-def health(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.json(conn, 200, JSON.from({"status": "ok"})))
-end
+def health(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.json(conn, 200, JSON.from({"status": "ok"})))
 
 def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
   body = try Bond.json_body(conn, ChatRequest.codec)
-  if body.messages.empty?
-    return Bond.bad_request("messages must not be empty")
-  end
+  return Bond.bad_request("messages must not be empty") if body.messages.empty?
 
   max_tokens = body.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)
-  if max_tokens < 1
-    return Bond.bad_request("max_tokens must be at least 1")
-  end
+  return Bond.bad_request("max_tokens must be at least 1") if max_tokens < 1
 
   text = try Llama.chat_prompt(api.model, body.messages)
   prompt = try Llama.tokenize(api.model, text)
@@ -145,31 +139,27 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
 
   case api.requests.send(request, ANSWER_TIMEOUT_MS)
     ok(_) ->
-      if stream
-        return stream_answer(api, conn, reply, wants_usage(body))
-      end
+      return stream_answer(api, conn, reply, wants_usage(body)) if stream
 
-      return answer(api, conn, reply)
-    error(message) -> return ok(Bond.halt(conn, 503, message))
+      answer(api, conn, reply)
+    error(message) -> ok(Bond.halt(conn, 503, message))
   end
 end
 
 def wants_usage(body: ChatRequest) -> Bool
   case body.stream_options
-    some(options) -> return options.include_usage.unwrap_or(false)
-    none -> return false
+    some(options) -> options.include_usage.unwrap_or(false)
+    none -> false
   end
 end
 
 def answer(api: Api, conn: Bond.Conn, reply: Channel[Engines.GenResult]) -> Result[Bond.Conn]
   case reply.recv(ANSWER_TIMEOUT_MS)
     ok(result) ->
-      if result.finish_reason == "error"
-        return ok(Bond.halt(conn, 400, result.failure))
-      end
+      return ok(Bond.halt(conn, 400, result.failure)) if result.finish_reason == "error"
 
-      return ok(respond(api, conn, result))
-    error(message) -> return ok(Bond.halt(conn, 504, message))
+      ok(respond(api, conn, result))
+    error(message) -> ok(Bond.halt(conn, 504, message))
   end
 end
 
@@ -193,7 +183,7 @@ def respond(api: Api, conn: Bond.Conn, result: Engines.GenResult) -> Bond.Conn
     ),
   )
 
-  return Bond.json_as(conn, 200, ChatResponse.codec, response)
+  Bond.json_as(conn, 200, ChatResponse.codec, response)
 end
 
 # Waits for the first piece, so a request the engine refuses is still a 400 (the head of a stream cannot be
@@ -206,9 +196,7 @@ def stream_answer(
 ) -> Result[Bond.Conn]
   case reply.recv(ANSWER_TIMEOUT_MS)
     ok(first) ->
-      if first.finish_reason == "error"
-        return ok(Bond.halt(conn, 400, first.failure))
-      end
+      return ok(Bond.halt(conn, 400, first.failure)) if first.finish_reason == "error"
 
       events: Channel[Bytes] = Channel.new(EVENT_BUFFER)
       pump = Pump(
@@ -223,10 +211,10 @@ def stream_answer(
 
       # Owning: the task owns `reply` and `events`, so a crash of the pump closes them and the response ends.
       Task.spawn_owning(&pump_events, pump)
-      return ok(Bond.sse(conn, events))
+      ok(Bond.sse(conn, events))
     error(message) ->
       reply.close
-      return ok(Bond.halt(conn, 504, message))
+      ok(Bond.halt(conn, 504, message))
   end
 end
 
@@ -255,9 +243,7 @@ def relay(pump: Pump, first: Engines.GenResult) -> Void
       return
     end
 
-    if not piece.finish_reason.empty?
-      break
-    end
+    break if not piece.finish_reason.empty?
 
     case pump.reply.recv(PIECE_WAIT_MS)
       ok(next_piece) -> piece = next_piece
@@ -268,13 +254,9 @@ def relay(pump: Pump, first: Engines.GenResult) -> Void
     end
   end
 
-  if not send_chunk(pump, Delta(), JsonField.Value(piece.finish_reason))
-    return
-  end
+  return if not send_chunk(pump, Delta(), JsonField.Value(piece.finish_reason))
 
-  if pump.include_usage and not send_usage(pump, piece)
-    return
-  end
+  return if pump.include_usage and not send_usage(pump, piece)
 
   _ = pump.events.send(Bond.sse_event("[DONE]"), EVENT_SEND_TIMEOUT_MS)
 end
@@ -293,7 +275,7 @@ def send_chunk(pump: Pump, delta: Delta, finish: JsonField[String]) -> Bool
     choices: [ChunkChoice(index: 0, delta: delta, finish_reason: finish)],
   )
 
-  return pump.events.send(Bond.sse_event(JSON.encode(chunk)), EVENT_SEND_TIMEOUT_MS).ok?
+  pump.events.send(Bond.sse_event(JSON.encode(chunk)), EVENT_SEND_TIMEOUT_MS).ok?
 end
 
 # The usage chunk of `stream_options.include_usage`: no choices, only the counts.
@@ -314,5 +296,5 @@ def send_usage(pump: Pump, last: Engines.GenResult) -> Bool
     usage: JsonField.Value(usage),
   )
 
-  return pump.events.send(Bond.sse_event(JSON.encode(chunk)), EVENT_SEND_TIMEOUT_MS).ok?
+  pump.events.send(Bond.sse_event(JSON.encode(chunk)), EVENT_SEND_TIMEOUT_MS).ok?
 end

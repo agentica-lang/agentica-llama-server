@@ -56,9 +56,7 @@ def serve(options: Cli.Options) -> Result[Void]
   puts("listening on #{options.host}:#{Bond.local_port(server)}")
   IO.flush()
   try Bond.wait(server)
-  return Task.await(engine)
+  Task.await(engine)
 end
 
-def run_engine(job: EngineJob) -> Result[Void]
-  return Engines.run(job.model, job.config, job.requests)
-end
+def run_engine(job: EngineJob) -> Result[Void] = Engines.run(job.model, job.config, job.requests)

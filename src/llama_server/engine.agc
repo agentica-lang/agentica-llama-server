@@ -114,7 +114,7 @@ export def run(model: Llama.Model, config: EngineConfig, requests: Channel[GenRe
     end
   end
 
-  return ok()
+  ok()
 end
 
 # Adds a step to the window and prints the window to stderr every few seconds when `--stats` is on.
@@ -127,14 +127,12 @@ def account(config: EngineConfig, stats: Stats, done: StepResult, step_ns: Int) 
   )
 
   now = Time.monotonic_ms()
-  if not config.stats or now - grown.since_ms < STATS_WINDOW_MS
-    return grown
-  end
+  return grown if not config.stats or now - grown.since_ms < STATS_WINDOW_MS
 
   decode_ms = grown.decode_ns / 1_000_000
   other_ms = (grown.step_ns - grown.decode_ns) / 1_000_000
   IO.warn("stats: steps=#{grown.steps} tokens=#{grown.rows} decode_ms=#{decode_ms} agentica_ms=#{other_ms}")
-  return Stats(steps: 0, rows: 0, decode_ns: 0, step_ns: 0, since_ms: now)
+  Stats(steps: 0, rows: 0, decode_ns: 0, step_ns: 0, since_ms: now)
 end
 
 # Takes waiting requests while a slot is free. Idle, it waits a little for the first one; busy, it only looks.
@@ -157,7 +155,7 @@ def admit(engine: Engine, seqs: List[Seq], requests: Channel[GenRequest]) -> Lis
     end
   end
 
-  return active
+  active
 end
 
 # Gives the request the lowest free slot. A request that cannot run is answered here and dropped.
@@ -170,7 +168,7 @@ def start(engine: Engine, active: List[Seq], request: GenRequest) -> Result[Seq]
 
   case Llama.new_sampler(request.temperature, request.seed)
     ok(sampler) ->
-      return ok(
+      ok(
         Seq(
           slot: free_slot(active),
           request: request,
@@ -185,7 +183,7 @@ def start(engine: Engine, active: List[Seq], request: GenRequest) -> Result[Seq]
       )
     error(message) ->
       refuse(request, message)
-      return error("refused")
+      error("refused")
   end
 end
 
@@ -196,12 +194,10 @@ def free_slot(active: List[Seq]) -> Int
     slot += 1
   end
 
-  return slot
+  slot
 end
 
-def taken_in?(taken: List[Int], slot: Int) -> Bool
-  return taken.any? do |t| t == slot end
-end
+def taken_in?(taken: List[Int], slot: Int) -> Bool = taken.any? do |t| t == slot end
 
 # One batch: decode it, then sample and settle each sequence.
 def step(engine: Engine, seqs: List[Seq]) -> StepResult
@@ -218,7 +214,7 @@ def step(engine: Engine, seqs: List[Seq]) -> StepResult
 
   start_list: List[Seq] = []
   kept = feeds.reduce(start_list) do |acc, f| settle(engine, acc, f) end
-  return StepResult(seqs: kept, rows: items.size, decode_ns: decode_ns)
+  StepResult(seqs: kept, rows: items.size, decode_ns: decode_ns)
 end
 
 # Gives each sequence its pending tokens, in order, while the batch has room.
@@ -238,7 +234,7 @@ def plan(budget: Int, seqs: List[Seq]) -> List[Feed]
     end
   end
 
-  return feeds
+  feeds
 end
 
 def items_of(feed: Feed) -> List[Llama.BatchItem]
@@ -256,15 +252,13 @@ def items_of(feed: Feed) -> List[Llama.BatchItem]
     )
   end
 
-  return items
+  items
 end
 
 # Adds the sequence to `kept` unless it finished.
 def settle(engine: Engine, kept: List[Seq], feed: Feed) -> List[Seq]
   seq = feed.seq.with(pending: feed.seq.pending.drop(feed.fed), pos: feed.seq.pos + feed.fed)
-  if feed.row < 0
-    return kept.push(seq)
-  end
+  return kept.push(seq) if feed.row < 0
 
   token = Llama.sample(seq.sampler, engine.ctx, feed.row)
   if Llama.eog?(engine.model, token)
@@ -273,9 +267,7 @@ def settle(engine: Engine, kept: List[Seq], feed: Feed) -> List[Seq]
   end
 
   piece = Llama.piece(engine.model, token, engine.scratch)
-  if seq.request.stream
-    return settle_streaming(engine, kept, seq, token, piece)
-  end
+  return settle_streaming(engine, kept, seq, token, piece) if seq.request.stream
 
   grown = seq.with(pending: [token], parts: seq.parts.push(piece), generated: seq.generated + 1)
   if grown.generated >= grown.limit
@@ -283,7 +275,7 @@ def settle(engine: Engine, kept: List[Seq], feed: Feed) -> List[Seq]
     return kept
   end
 
-  return kept.push(grown)
+  kept.push(grown)
 end
 
 # A streaming sequence sends the text of the new token at once. A character can be split between tokens, so
@@ -307,7 +299,7 @@ def settle_streaming(engine: Engine, kept: List[Seq], seq: Seq, token: Int, piec
     return kept
   end
 
-  return kept.push(grown)
+  kept.push(grown)
 end
 
 # How many leading bytes of `bytes` are whole UTF-8 characters: the rest is a character that is still missing
@@ -317,9 +309,7 @@ def utf8_complete(bytes: Bytes) -> Int
   back = 1
   while back <= 3 and back <= size
     byte = bytes[size - back]
-    if byte < 128
-      return size
-    end
+    return size if byte < 128
 
     if byte >= 192
       need = 2
@@ -329,9 +319,7 @@ def utf8_complete(bytes: Bytes) -> Int
         need = 3
       end
 
-      if need > back
-        return size - back
-      end
+      return size - back if need > back
 
       return size
     end
@@ -339,7 +327,7 @@ def utf8_complete(bytes: Bytes) -> Int
     back += 1
   end
 
-  return size
+  size
 end
 
 def finish(engine: Engine, seq: Seq, reason: String) -> Void
