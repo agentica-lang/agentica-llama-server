@@ -16,21 +16,17 @@ def generate(model: Llama.Model, ctx: Llama.Context, prompt: List[Int], limit: I
   pos = prompt.size
   for _ in 0...limit
     rc = Llama.decode(ctx, Llama.fill(buffer, items))
-    if rc != 0
-      return error("decode failed: #{rc}")
-    end
+    return error("decode failed: #{rc}") if rc != 0
 
     token = Llama.sample(sampler, ctx, items.size - 1)
-    if Llama.eog?(model, token)
-      break
-    end
+    break if Llama.eog?(model, token)
 
     parts = parts.push(Llama.piece(model, token, scratch))
     items = [Llama.BatchItem(token: token, pos: pos, slot: 0, wants_logits: true)]
     pos += 1
   end
 
-  return String.from_bytes(Bytes.concat(parts))
+  String.from_bytes(Bytes.concat(parts))
 end
 
 def run(model_path: String) -> Result[Void]
@@ -50,7 +46,7 @@ def run(model_path: String) -> Result[Void]
   puts("prompt tokens: #{tokens.size}")
   answer = try generate(model, ctx, tokens, 32)
   puts(answer)
-  return ok()
+  ok()
 end
 
 def main() -> Void

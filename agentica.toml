@@ -1,6 +1,6 @@
 name = "agentica-llama-server"
 
-# Needs Agentica 0.27.0 or later (Bond 0.10.0 needs it).
+# Needs Agentica 0.30.0 or later (the sources use the syntax of `agentica fmt` of 0.30.0).
 
 [style]
 blank_line_after_end = true

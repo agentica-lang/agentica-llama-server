@@ -161,8 +161,8 @@ end
 export def load_model(path: String) -> Result[Model]
   model = llama_model_load_from_file(path, llama_model_default_params().with(n_gpu_layers: 0))
   case model
-    ok(m) -> return ok(m)
-    error(_) -> return error("cannot load the model at #{path}")
+    ok(m) -> ok(m)
+    error(_) -> error("cannot load the model at #{path}")
   end
 end
 
@@ -180,8 +180,8 @@ export def new_context(model: Model, n_ctx: Int, n_batch: Int, n_seq: Int, threa
   )
 
   case llama_init_from_model(model, params)
-    ok(ctx) -> return ok(ctx)
-    error(_) -> return error("cannot create the context")
+    ok(ctx) -> ok(ctx)
+    error(_) -> error("cannot create the context")
   end
 end
 
@@ -220,11 +220,9 @@ export def chat_prompt(model: Model, messages: List[ChatMessage]) -> Result[Stri
     Native.free(pair[1])
   end
 
-  if written < 0
-    return error("the chat template does not apply to these messages")
-  end
+  return error("the chat template does not apply to these messages") if written < 0
 
-  return ok(text)
+  ok(text)
 end
 
 ## The token ids of `text`, special tokens (such as `<|im_start|>`) included.
@@ -241,26 +239,20 @@ export def tokenize(model: Model, text: String) -> Result[List[Int]]
 
   Native.free(out)
   Native.free(input)
-  if count < 0
-    return error("cannot tokenize the prompt")
-  end
+  return error("cannot tokenize the prompt") if count < 0
 
-  return ok(tokens)
+  ok(tokens)
 end
 
-export def eog?(model: Model, token: Int) -> Bool
-  return llama_vocab_is_eog(llama_model_get_vocab(model), token)
-end
+export def eog?(model: Model, token: Int) -> Bool = llama_vocab_is_eog(llama_model_get_vocab(model), token)
 
 ## The bytes of one token. A character can be split between two tokens, so the caller joins bytes, not strings.
 ## `scratch` is a buffer of at least `PIECE_BYTES` that the caller owns.
 export def piece(model: Model, token: Int, scratch: C.Pointer) -> Bytes
   n = llama_token_to_piece(llama_model_get_vocab(model), token, scratch, PIECE_BYTES, 0, false)
-  if n <= 0
-    return "".bytes
-  end
+  return "".bytes if n <= 0
 
-  return Native.get_bytes(scratch, 0, n)
+  Native.get_bytes(scratch, 0, n)
 end
 
 ## A sampler chain that runs in C: greedy at temperature 0, else temperature and a seeded draw.
@@ -275,19 +267,17 @@ export def new_sampler(temperature: Float, seed: Int) -> Result[Sampler]
         llama_sampler_chain_add(sampler, llama_sampler_init_dist(seed))
       end
 
-      return ok(sampler)
-    error(_) -> return error("cannot create a sampler")
+      ok(sampler)
+    error(_) -> error("cannot create a sampler")
   end
 end
 
 ## The next token of the sequence whose logits are at row `row` of the last decoded batch.
-export def sample(sampler: Sampler, ctx: Context, row: Int) -> Int
-  return llama_sampler_sample(sampler, ctx, row)
-end
+export def sample(sampler: Sampler, ctx: Context, row: Int) -> Int = llama_sampler_sample(sampler, ctx, row)
 
 export def new_batch(capacity: Int) -> BatchBuffer
   # One sequence id per token, so a batch row never belongs to two sequences.
-  return BatchBuffer(batch: llama_batch_init(capacity, 0, 1), capacity: capacity)
+  BatchBuffer(batch: llama_batch_init(capacity, 0, 1), capacity: capacity)
 end
 
 ## Writes `items` into the batch and returns the batch to pass to `decode`.
@@ -303,13 +293,11 @@ export def fill(buffer: BatchBuffer, items: List[BatchItem]) -> Batch
     Native.put_int32(cell, 0, items[k].slot)
   end
 
-  return b.with(n_tokens: n)
+  b.with(n_tokens: n)
 end
 
 ## Runs the model over the batch. 0 is success.
-export def decode(ctx: Context, batch: Batch) -> Int
-  return llama_decode(ctx, batch)
-end
+export def decode(ctx: Context, batch: Batch) -> Int = llama_decode(ctx, batch)
 
 ## Forgets the KV cache of one sequence, so its slot can take another request.
 export def clear_slot(ctx: Context, slot: Int) -> Void
@@ -318,15 +306,13 @@ end
 
 def logit_flags(items: List[BatchItem]) -> Bytes
   flags = items.map do |i| flag(i.wants_logits) end
-  return Bytes.from_list(flags).unwrap!
+  Bytes.from_list(flags).unwrap!
 end
 
 def flag(on: Bool) -> Int
-  if on
-    return 1
-  end
+  return 1 if on
 
-  return 0
+  0
 end
 
 extern "ggml"
