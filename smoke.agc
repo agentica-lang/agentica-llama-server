@@ -52,6 +52,6 @@ end
 def main() -> Void
   case run("deps/qwen2.5-0.5b-instruct-q4_k_m.gguf")
     ok(_) -> puts("done")
-    error(message) -> puts("error: #{message}")
+    error(e) -> puts("error: #{e.message}")
   end
 end

@@ -1,6 +1,5 @@
 name = "agentica-llama-server"
-
-# Needs Agentica 0.30.0 or later (the sources use the syntax of `agentica fmt` of 0.30.0).
+agentica = "0.31.2"
 
 [style]
 blank_line_after_end = true
@@ -14,4 +13,4 @@ linux = { file = "native/linux/libllama.so.0" }
 linux = { file = "native/linux/libggml.so.0" }
 
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.10.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.12.0" }

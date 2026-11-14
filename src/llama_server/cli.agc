@@ -3,7 +3,7 @@
 import OP from "std/option_parser"
 import {Opt, Kind} from "std/option_parser"
 
-export struct Options
+struct Options
   model: String
   backends: String
   host: String
@@ -17,7 +17,7 @@ end
 
 ## Reads the words of `System.args()`. `--help` and a bad command line are errors: the caller passes the result to
 ## `OP.run!`, which prints the help or the message and exits.
-export def parse(args: List[String]) -> Result[Options]
+def parse(args: List[String]) -> Result[Options]
   parsed = try OP.parse(parser(), args)
   ok(
     Options(
@@ -33,6 +33,8 @@ export def parse(args: List[String]) -> Result[Options]
     ),
   )
 end
+
+private
 
 def parser() -> OP.Parser
   OP.new(

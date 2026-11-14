@@ -12,13 +12,9 @@
 import Llama from "llama"
 import Numbers from "numbers"
 
-IDLE_WAIT_MS = 100
-STATS_WINDOW_MS = 5000
-REPLY_TIMEOUT_MS = 5000
-
 ## A request already tokenized by the route; the answer goes back on `reply`: one `GenResult`, or, when `stream` is
 ## on, a piece per step and a last one with the finish reason.
-export struct GenRequest
+struct GenRequest
   prompt: List[Int]
   max_tokens: Int
   temperature: Float
@@ -29,7 +25,7 @@ end
 
 ## The whole answer, or in a stream the text of one piece (`finish_reason` is "" until the last one, whose `text` is
 ## empty). `completion_tokens` counts the tokens sampled so far in a piece.
-export struct GenResult
+struct GenResult
   text: String
   prompt_tokens: Int
   completion_tokens: Int
@@ -37,13 +33,45 @@ export struct GenResult
   failure: String
 end
 
-export struct EngineConfig
+struct EngineConfig
   n_ctx: Int
   n_batch: Int
   n_parallel: Int
   threads: Int
   stats: Bool = false
 end
+
+## Runs until the process ends; returns an error only when the context cannot be created.
+def run(model: Llama.Model, config: EngineConfig, requests: Channel[GenRequest]) -> Result[Void]
+  ctx = try Llama.new_context(model, config.n_ctx, config.n_batch, config.n_parallel, config.threads)
+  engine = Engine(
+    model: model,
+    ctx: ctx,
+    buffer: Llama.new_batch(config.n_batch),
+    scratch: Native.memory_pointer(Llama.PIECE_BYTES),
+    config: config,
+  )
+
+  seqs: List[Seq] = []
+  _stats = Stats(steps: 0, rows: 0, decode_ns: 0, step_ns: 0, since_ms: Time.monotonic_ms())
+  while true
+    seqs = admit(engine, seqs, requests)
+    if not seqs.empty?
+      began = Time.monotonic_ns()
+      done = step(engine, seqs)
+      seqs = done.seqs
+      _stats = account(config, _stats, done, Time.monotonic_ns() - began)
+    end
+  end
+
+  ok()
+end
+
+private
+
+IDLE_WAIT_MS = 100
+STATS_WINDOW_MS = 5000
+REPLY_TIMEOUT_MS = 5000
 
 # Where the time of a window of steps went, in nanoseconds: in `llama_decode` (C) or in everything else of the
 # step (filling the batch, sampling, bookkeeping: Agentica).
@@ -89,32 +117,6 @@ struct Feed
   seq: Seq
   fed: Int
   row: Int
-end
-
-## Runs until the process ends; returns an error only when the context cannot be created.
-export def run(model: Llama.Model, config: EngineConfig, requests: Channel[GenRequest]) -> Result[Void]
-  ctx = try Llama.new_context(model, config.n_ctx, config.n_batch, config.n_parallel, config.threads)
-  engine = Engine(
-    model: model,
-    ctx: ctx,
-    buffer: Llama.new_batch(config.n_batch),
-    scratch: Native.memory_pointer(Llama.PIECE_BYTES),
-    config: config,
-  )
-
-  seqs: List[Seq] = []
-  _stats = Stats(steps: 0, rows: 0, decode_ns: 0, step_ns: 0, since_ms: Time.monotonic_ms())
-  while true
-    seqs = admit(engine, seqs, requests)
-    if not seqs.empty?
-      began = Time.monotonic_ns()
-      done = step(engine, seqs)
-      seqs = done.seqs
-      _stats = account(config, _stats, done, Time.monotonic_ns() - began)
-    end
-  end
-
-  ok()
 end
 
 # Adds a step to the window and prints the window to stderr every few seconds when `--stats` is on.
@@ -181,8 +183,8 @@ def start(engine: Engine, active: List[Seq], request: GenRequest) -> Result[Seq]
           generated: 0,
         ),
       )
-    error(message) ->
-      refuse(request, message)
+    error(e) ->
+      refuse(request, e.message)
       error("refused")
   end
 end
