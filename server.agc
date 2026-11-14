@@ -8,6 +8,7 @@ import Bond from "pkg/bond/bond"
 import Cli from "src/llama_server/cli"
 import Engines from "src/llama_server/engine"
 import Llama from "src/llama_server/llama"
+import HTTP from "std/http"
 import OP from "std/option_parser"
 
 REQUEST_QUEUE = 4096
@@ -26,8 +27,8 @@ end
 def run(options: Cli.Options) -> Void
   case serve(options)
     ok(_) -> puts("stopped")
-    error(message) ->
-      puts("error: #{message}")
+    error(e) ->
+      puts("error: #{e.message}")
       System.exit(1)
   end
 end
@@ -50,7 +51,7 @@ def serve(options: Cli.Options) -> Result[Void]
     Api.app(api),
     options.host,
     options.port,
-    HttpServerOptions(max_connections: 1024, max_body_bytes: 4_194_304),
+    HTTP.ServerOptions(max_connections: 1024, max_body_bytes: 4_194_304),
   )
 
   puts("listening on #{options.host}:#{Bond.local_port(server)}")

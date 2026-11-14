@@ -5,18 +5,13 @@
 
 import Numbers from "numbers"
 
-BYTES_PER_TOKEN = 4
-POINTER_BYTES = 8
-CHAT_MESSAGE_BYTES = 16
-MAX_UBATCH = 512
-
 ## The size of the scratch buffer `piece` needs.
-export PIECE_BYTES = 256
+PIECE_BYTES = 256
 
 extern "llama"
-  export resource Model, free: llama_model_free
-  export resource Context, free: llama_free
-  export resource Sampler, free: llama_sampler_free
+  resource Model, free: llama_model_free
+  resource Context, free: llama_free
+  resource Sampler, free: llama_sampler_free
 
   struct ModelParams
     devices: C.Pointer
@@ -132,13 +127,13 @@ extern "llama"
 end
 
 ## One message of a chat, as the OpenAI API names it.
-export struct ChatMessage
+struct ChatMessage
   role: String
   content: String
 end
 
 ## One token of a batch: the slot is its sequence id.
-export struct BatchItem
+struct BatchItem
   token: Int
   pos: Int
   slot: Int
@@ -146,19 +141,19 @@ export struct BatchItem
 end
 
 ## The batch arrays are allocated once for `capacity` tokens and rewritten at each step.
-export struct BatchBuffer
+struct BatchBuffer
   batch: Batch
   capacity: Int
 end
 
 ## Loads the CPU backends that sit in `backend_dir` (the release builds them as separate libraries) and starts
 ## llama.cpp.
-export def init(backend_dir: String) -> Void
+def init(backend_dir: String) -> Void
   ggml_backend_load_all_from_path(backend_dir)
   llama_backend_init()
 end
 
-export def load_model(path: String) -> Result[Model]
+def load_model(path: String) -> Result[Model]
   model = llama_model_load_from_file(path, llama_model_default_params().with(n_gpu_layers: 0))
   case model
     ok(m) -> ok(m)
@@ -167,7 +162,7 @@ export def load_model(path: String) -> Result[Model]
 end
 
 ## A context with `n_seq` sequences that share `n_ctx` tokens of KV cache, so each holds `n_ctx / n_seq`.
-export def new_context(model: Model, n_ctx: Int, n_batch: Int, n_seq: Int, threads: Int) -> Result[Context]
+def new_context(model: Model, n_ctx: Int, n_batch: Int, n_seq: Int, threads: Int) -> Result[Context]
   params = llama_context_default_params().with(
     n_ctx: n_ctx,
     n_batch: n_batch,
@@ -186,7 +181,7 @@ export def new_context(model: Model, n_ctx: Int, n_batch: Int, n_seq: Int, threa
 end
 
 ## The text of a chat as the model's own template makes it, ready to tokenize.
-export def chat_prompt(model: Model, messages: List[ChatMessage]) -> Result[String]
+def chat_prompt(model: Model, messages: List[ChatMessage]) -> Result[String]
   count = messages.size
   total = messages.reduce(0) do |sum, m| sum + m.role.bytesize + m.content.bytesize end
   # One message holds two C strings; their buffers live until the call returns.
@@ -226,7 +221,7 @@ export def chat_prompt(model: Model, messages: List[ChatMessage]) -> Result[Stri
 end
 
 ## The token ids of `text`, special tokens (such as `<|im_start|>`) included.
-export def tokenize(model: Model, text: String) -> Result[List[Int]]
+def tokenize(model: Model, text: String) -> Result[List[Int]]
   vocab = llama_model_get_vocab(model)
   size = text.bytesize + 16
   input = Native.from_string(text)
@@ -244,11 +239,11 @@ export def tokenize(model: Model, text: String) -> Result[List[Int]]
   ok(tokens)
 end
 
-export def eog?(model: Model, token: Int) -> Bool = llama_vocab_is_eog(llama_model_get_vocab(model), token)
+def eog?(model: Model, token: Int) -> Bool = llama_vocab_is_eog(llama_model_get_vocab(model), token)
 
 ## The bytes of one token. A character can be split between two tokens, so the caller joins bytes, not strings.
 ## `scratch` is a buffer of at least `PIECE_BYTES` that the caller owns.
-export def piece(model: Model, token: Int, scratch: C.Pointer) -> Bytes
+def piece(model: Model, token: Int, scratch: C.Pointer) -> Bytes
   n = llama_token_to_piece(llama_model_get_vocab(model), token, scratch, PIECE_BYTES, 0, false)
   return "".bytes if n <= 0
 
@@ -256,7 +251,7 @@ export def piece(model: Model, token: Int, scratch: C.Pointer) -> Bytes
 end
 
 ## A sampler chain that runs in C: greedy at temperature 0, else temperature and a seeded draw.
-export def new_sampler(temperature: Float, seed: Int) -> Result[Sampler]
+def new_sampler(temperature: Float, seed: Int) -> Result[Sampler]
   chain = llama_sampler_chain_init(llama_sampler_chain_default_params())
   case chain
     ok(sampler) ->
@@ -273,15 +268,15 @@ export def new_sampler(temperature: Float, seed: Int) -> Result[Sampler]
 end
 
 ## The next token of the sequence whose logits are at row `row` of the last decoded batch.
-export def sample(sampler: Sampler, ctx: Context, row: Int) -> Int = llama_sampler_sample(sampler, ctx, row)
+def sample(sampler: Sampler, ctx: Context, row: Int) -> Int = llama_sampler_sample(sampler, ctx, row)
 
-export def new_batch(capacity: Int) -> BatchBuffer
+def new_batch(capacity: Int) -> BatchBuffer
   # One sequence id per token, so a batch row never belongs to two sequences.
   BatchBuffer(batch: llama_batch_init(capacity, 0, 1), capacity: capacity)
 end
 
 ## Writes `items` into the batch and returns the batch to pass to `decode`.
-export def fill(buffer: BatchBuffer, items: List[BatchItem]) -> Batch
+def fill(buffer: BatchBuffer, items: List[BatchItem]) -> Batch
   b = buffer.batch
   n = items.size
   Native.put_array_of_int32(b.token, 0, items.map do |i| i.token end)
@@ -297,12 +292,19 @@ export def fill(buffer: BatchBuffer, items: List[BatchItem]) -> Batch
 end
 
 ## Runs the model over the batch. 0 is success.
-export def decode(ctx: Context, batch: Batch) -> Int = llama_decode(ctx, batch)
+def decode(ctx: Context, batch: Batch) -> Int = llama_decode(ctx, batch)
 
 ## Forgets the KV cache of one sequence, so its slot can take another request.
-export def clear_slot(ctx: Context, slot: Int) -> Void
+def clear_slot(ctx: Context, slot: Int) -> Void
   _ = llama_memory_seq_rm(llama_get_memory(ctx), slot, -1, -1)
 end
+
+private
+
+BYTES_PER_TOKEN = 4
+POINTER_BYTES = 8
+CHAT_MESSAGE_BYTES = 16
+MAX_UBATCH = 512
 
 def logit_flags(items: List[BatchItem]) -> Bytes
   flags = items.map do |i| flag(i.wants_logits) end

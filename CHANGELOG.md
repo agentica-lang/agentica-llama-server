@@ -6,7 +6,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Changed
 
-- **Breaking:** needs Agentica 0.30.0 or later and Bond 0.10.0: the sources are formatted with `agentica fmt` of 0.30.0, which uses its syntax (implicit returns, guards, one-line defs). CI tests with Agentica 0.30.0. The request and response codecs are `ChatRequest.codec` and `ChatResponse.codec`.
+- **Breaking:** needs Agentica 0.31.2 or later and Bond 0.12.0: the sources use `private` instead of `export`, the nested builtin names (`JSON.Field`, `HTTP.ServerOptions`) and the `Error` record of a failed Result, and are formatted with `agentica fmt` (implicit returns, guards, one-line defs). `agentica.toml` names the oldest Agentica it needs. CI tests with Agentica 0.31.2. The request and response codecs are `ChatRequest.codec` and `ChatResponse.codec`.
 
 ## [0.1.0] - 2026-11-05
 

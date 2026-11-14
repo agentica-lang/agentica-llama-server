@@ -6,22 +6,38 @@ import Engines from "../llama_server/engine"
 import Llama from "../llama_server/llama"
 import Numbers from "../llama_server/numbers"
 
-DEFAULT_MAX_TOKENS = 128
-ANSWER_TIMEOUT_MS = 600_000
-# The events channel to Bond holds a few chunks; a client that stops reading for this long is dropped.
-EVENT_BUFFER = 16
-EVENT_SEND_TIMEOUT_MS = 10_000
-PIECE_WAIT_MS = 60_000
-
 ## What the routes share: the model (to apply the chat template and tokenize), the engine's request channel and a
 ## table with the request counter.
-export struct Api
+struct Api
   model: Llama.Model
   requests: Channel[Engines.GenRequest]
   counters: ATS[String, Int]
   model_name: String
   n_ctx: Int
 end
+
+## `n_ctx` bounds how many pieces a stream can hold, so the engine never waits for a slow reader.
+def new_api(model: Llama.Model, requests: Channel[Engines.GenRequest], model_name: String, n_ctx: Int) -> Api
+  counters: ATS[String, Int] = ATS.new()
+  Api(model: model, requests: requests, counters: counters, model_name: model_name, n_ctx: n_ctx)
+end
+
+def app(api: Api) -> Bond.App
+  (
+    Bond.app()
+    |> Bond.get("/health", &health)
+    |> Bond.post("/v1/chat/completions") do |conn| chat(api, conn) end
+  )
+end
+
+private
+
+DEFAULT_MAX_TOKENS = 128
+ANSWER_TIMEOUT_MS = 600_000
+# The events channel to Bond holds a few chunks; a client that stops reading for this long is dropped.
+EVENT_BUFFER = 16
+EVENT_SEND_TIMEOUT_MS = 10_000
+PIECE_WAIT_MS = 60_000
 
 struct StreamOptions
   include_usage: Optional[Bool] = none
@@ -65,14 +81,14 @@ end
 # What a `chat.completion.chunk` carries: a key that is absent stays out of the JSON (the final delta is `{}`),
 # `finish_reason` is `null` until the last chunk.
 struct Delta
-  role: JsonField[String] = JsonField.Absent
-  content: JsonField[String] = JsonField.Absent
+  role: JSON.Field[String] = JSON.Field.Absent
+  content: JSON.Field[String] = JSON.Field.Absent
 end
 
 struct ChunkChoice
   index: Int
   delta: Delta
-  finish_reason: JsonField[String] = JsonField.Null
+  finish_reason: JSON.Field[String] = JSON.Field.Null
 end
 
 struct Chunk
@@ -81,7 +97,7 @@ struct Chunk
   created: Int
   model: String
   choices: List[ChunkChoice]
-  usage: JsonField[Usage] = JsonField.Absent
+  usage: JSON.Field[Usage] = JSON.Field.Absent
 end
 
 # What the task that turns engine pieces into events needs; it cannot take the `Conn`.
@@ -93,20 +109,6 @@ struct Pump
   created: Int
   model: String
   include_usage: Bool
-end
-
-## `n_ctx` bounds how many pieces a stream can hold, so the engine never waits for a slow reader.
-export def new_api(model: Llama.Model, requests: Channel[Engines.GenRequest], model_name: String, n_ctx: Int) -> Api
-  counters: ATS[String, Int] = ATS.new()
-  Api(model: model, requests: requests, counters: counters, model_name: model_name, n_ctx: n_ctx)
-end
-
-export def app(api: Api) -> Bond.App
-  (
-    Bond.app()
-    |> Bond.get("/health", &health)
-    |> Bond.post("/v1/chat/completions") do |conn| chat(api, conn) end
-  )
 end
 
 def health(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.json(conn, 200, JSON.from({"status": "ok"})))
@@ -142,7 +144,7 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
       return stream_answer(api, conn, reply, wants_usage(body)) if stream
 
       answer(api, conn, reply)
-    error(message) -> ok(Bond.halt(conn, 503, message))
+    error(e) -> ok(Bond.halt(conn, 503, e.message))
   end
 end
 
@@ -159,7 +161,7 @@ def answer(api: Api, conn: Bond.Conn, reply: Channel[Engines.GenResult]) -> Resu
       return ok(Bond.halt(conn, 400, result.failure)) if result.finish_reason == "error"
 
       ok(respond(api, conn, result))
-    error(message) -> ok(Bond.halt(conn, 504, message))
+    error(e) -> ok(Bond.halt(conn, 504, e.message))
   end
 end
 
@@ -212,9 +214,9 @@ def stream_answer(
       # Owning: the task owns `reply` and `events`, so a crash of the pump closes them and the response ends.
       Task.spawn_owning(&pump_events, pump)
       ok(Bond.sse(conn, events))
-    error(message) ->
+    error(e) ->
       reply.close
-      ok(Bond.halt(conn, 504, message))
+      ok(Bond.halt(conn, 504, e.message))
   end
 end
 
@@ -222,7 +224,7 @@ end
 # the finish reason (and the usage when asked) and `[DONE]`. When an event cannot be sent (the client left, or
 # stopped reading) it closes `reply`, which makes the engine's next send fail and free the slot.
 def pump_events(pump: Pump) -> Void
-  if send_chunk(pump, Delta(role: JsonField.Value("assistant"), content: JsonField.Value("")), JsonField.Null)
+  if send_chunk(pump, Delta(role: JSON.Field.Value("assistant"), content: JSON.Field.Value("")), JSON.Field.Null)
     relay(pump, pump.first)
   end
 
@@ -239,7 +241,7 @@ def relay(pump: Pump, first: Engines.GenResult) -> Void
       return
     end
 
-    if not piece.text.empty? and not send_chunk(pump, Delta(content: JsonField.Value(piece.text)), JsonField.Null)
+    if not piece.text.empty? and not send_chunk(pump, Delta(content: JSON.Field.Value(piece.text)), JSON.Field.Null)
       return
     end
 
@@ -254,7 +256,7 @@ def relay(pump: Pump, first: Engines.GenResult) -> Void
     end
   end
 
-  return if not send_chunk(pump, Delta(), JsonField.Value(piece.finish_reason))
+  return if not send_chunk(pump, Delta(), JSON.Field.Value(piece.finish_reason))
 
   return if pump.include_usage and not send_usage(pump, piece)
 
@@ -266,7 +268,7 @@ def send_error(pump: Pump, message: String) -> Void
   _ = pump.events.send(Bond.sse_event(JSON.encode(failure)), EVENT_SEND_TIMEOUT_MS)
 end
 
-def send_chunk(pump: Pump, delta: Delta, finish: JsonField[String]) -> Bool
+def send_chunk(pump: Pump, delta: Delta, finish: JSON.Field[String]) -> Bool
   chunk = Chunk(
     id: pump.id,
     object: "chat.completion.chunk",
@@ -293,7 +295,7 @@ def send_usage(pump: Pump, last: Engines.GenResult) -> Bool
     created: pump.created,
     model: pump.model,
     choices: [],
-    usage: JsonField.Value(usage),
+    usage: JSON.Field.Value(usage),
   )
 
   pump.events.send(Bond.sse_event(JSON.encode(chunk)), EVENT_SEND_TIMEOUT_MS).ok?
