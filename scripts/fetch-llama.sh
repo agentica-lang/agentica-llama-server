@@ -2,10 +2,10 @@
 # Fetches the pinned prebuilt CPU llama.cpp release (libllama.so, ggml libs,
 # llama-server) into deps/llama.cpp. Nothing here is committed.
 set -euo pipefail
-TAG="b12012"
+TAG="b12426"
 FILE="llama-${TAG}-bin-ubuntu-x64.tar.gz"
 URL="https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/${FILE}"
-SHA256="432bc77dd8873c1313be9a81019740deb5058e91c3d7ff6d358d140b01c53c39"
+SHA256="011212b7a6052a213034d4c313f99f131cb09fb5fb5a4ee61cd7572b81febf67"
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$root/deps/llama.cpp"

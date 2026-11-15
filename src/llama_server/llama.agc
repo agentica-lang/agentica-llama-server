@@ -1,4 +1,4 @@
-## Bindings for the part of llama.cpp (llama.h, release b12012) that a server needs, with a small wrapper.
+## Bindings for the part of llama.cpp (llama.h, release b12426) that a server needs, with a small wrapper.
 ##
 ## The struct layouts are copied from llama.h of the same tag: a wrong field list is undefined behavior, so
 ## `scripts/fetch-headers.sh` gets the header to compare with. Enums are `C.Int32`.
@@ -55,12 +55,12 @@ extern "llama"
     yarn_beta_fast: C.Float
     yarn_beta_slow: C.Float
     yarn_orig_ctx: C.UInt32
-    defrag_thold: C.Float
     cb_eval: C.Pointer
     cb_eval_user_data: C.Pointer
     type_k: C.Int32
     type_v: C.Int32
     moe_cache_size: C.Int64
+    moe_cache_cpu_share: C.Float
     abort_callback: C.Pointer
     abort_callback_data: C.Pointer
     embeddings: C.Bool
