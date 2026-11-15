@@ -25,7 +25,7 @@ Closed since the first version:
   gives zero and the call fails with `RUNTIME-NATIVE-CALLBACK`. `llama_model_load_from_file` and `llama_decode` are
   `compute def` (`src/llama_server/llama.agc`), and ggml calls from its own threads, so the log, `progress_callback` and
   `abort_callback` cannot be set: `agentica smoke.agc` prints about 200 KB of llama.cpp log lines to stderr at start.
-- **A project `[native]` file must be under `native/`.** `[native.llama]` with `linux = { file = "deps/llama.cpp/libllama.so.0" }`
+- **A project `[native]` file must be under `native/`.** `[native.llama]` with `linux = { file = "deps/llama.cpp/libllama.so.1" }`
   fails: `PKG-MANIFEST-INVALID ... not a native file ... a native file is a path in the native/ folder of the package`.
   A prebuilt library that lives elsewhere (a fetched release) needs symlinks into `native/linux/` (what
   `scripts/fetch-llama.sh` does) or an absolute `system` path that cannot be committed. A project-relative path

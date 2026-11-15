@@ -7,10 +7,10 @@ blank_line_after_end = true
 # Prebuilt llama.cpp release (scripts/fetch-llama.sh). libllama.so finds
 # libggml.so next to itself through RUNPATH=$ORIGIN.
 [native.llama]
-linux = { file = "native/linux/libllama.so.0" }
+linux = { file = "native/linux/libllama.so.1" }
 
 [native.ggml]
-linux = { file = "native/linux/libggml.so.0" }
+linux = { file = "native/linux/libggml.so.1" }
 
 [dependencies]
 bond = { git = "https://github.com/agentica-lang/bond", tag = "0.12.0" }
