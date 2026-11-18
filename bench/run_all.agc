@@ -2,7 +2,8 @@
 ## as a Markdown table.
 ##
 ## Each server starts under a systemd scope with a memory cap, is warmed up, then each concurrency runs `--reps`
-## times. The processes are the ones that this program started, and it stops exactly those. Run it from the repo root, or give the root with `--root`:
+## times. The processes are the ones that this program started, and it stops exactly those. Run it from the repo root,
+## or give the root with `--root`:
 ##
 ## agentica bench/run_all.agc [--quick] [--only NAME] [--threads N] [--concurrency 1,4,16] [--stream] [--gpu-layers N]
 ##                           [--llama-dir DIR] [--out FILE] ...
