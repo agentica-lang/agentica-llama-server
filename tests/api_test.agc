@@ -68,7 +68,7 @@ end
 
 def serve() -> Result[Void]
   port = try free_port()
-  args = ["server.agc", "--port", port.to_s, "--threads", "2", "--parallel", "4", "--ctx", "4096"]
+  args = ["server.agc", "--port", port.to_s, "--threads", "2", "--parallel", "4", "--ctx", "4096", "--gpu-layers", "0"]
   options = Process.Options(timeout_ms: TIMEOUT_MS, out: LOG, err: LOG)
   server = try Process.spawn(System.env("AGENTICA").unwrap_or("agentica"), args, options)
   try wait_ready(server, port)

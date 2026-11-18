@@ -12,6 +12,7 @@ struct Options
   n_ctx: Int
   parallel: Int
   n_batch: Int
+  gpu_layers: Int
   stats: Bool
 end
 
@@ -29,6 +30,7 @@ def parse(args: List[String]) -> Result[Options]
       n_ctx: OP.int(parsed, "ctx"),
       parallel: OP.int(parsed, "parallel"),
       n_batch: OP.int(parsed, "batch"),
+      gpu_layers: OP.int(parsed, "gpu-layers"),
       stats: OP.string(parsed, "stats") == "on",
     ),
   )
@@ -50,6 +52,12 @@ def parser() -> OP.Parser
       Opt(name: "ctx", kind: Kind.Int, default: "8192", help: "tokens of KV cache, shared by the slots"),
       Opt(name: "parallel", kind: Kind.Int, default: "8", help: "slots, the requests decoded together"),
       Opt(name: "batch", kind: Kind.Int, default: "2048", help: "tokens per decode call"),
+      Opt(
+        name: "gpu-layers",
+        kind: Kind.Int,
+        default: "0",
+        help: "layers to offload to the GPU (needs a GPU backend in --backends)",
+      ),
       Opt(name: "stats", choices: ["on", "off"], default: "off", help: "print engine timings every 5 s of work"),
     ],
   )

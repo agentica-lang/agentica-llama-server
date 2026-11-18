@@ -31,7 +31,7 @@ end
 
 def run(model_path: String) -> Result[Void]
   Llama.init("native/linux")
-  model = try Llama.load_model(model_path)
+  model = try Llama.load_model(model_path, 0)
   ctx = try Llama.new_context(model, 2048, 512, 1, 4)
   text = try Llama.chat_prompt(
     model,

@@ -11,11 +11,12 @@ Run from the repo root. `scripts/fetch.agc` is a program in Agentica (`make fetc
 redirects, are taken in 32 MiB pieces and are checked against their sha256 before they take their name, and each step
 skips what it has. It does not import the bindings, so it runs before the libraries that the manifest names exist.
 
-- `llama`: llama.cpp v1.0.0 (build b12359), Linux x86-64 CPU build, sha256-checked, into `native/linux/`, because
+- `llama [--variant vulkan]`: llama.cpp v1.0.0 (build b12359), Linux x86-64 CPU build (or the Vulkan build, see
+  [GPU](#gpu)), sha256-checked, into `native/linux/`, because
   Agentica only loads `[native]` files from a `native/` folder (see [gaps.md](gaps.md)). The libraries are there by
   their soname (`libllama.so.1`), and `libggml-cpu-*.so`, which ggml loads from the same folder, and `llama-server` for
-  the benchmark come with them. The release is `scripts/llama-release`: its tag, the sha256 of its archive and the
-  sha256 of each header. The files that it keeps are listed in `scripts/fetch.agc` (`RELEASE_MEMBERS`); a release with
+  the benchmark come with them. The release is `scripts/llama-release`: its tag, the sha256 of its archive (and of
+  the Vulkan one) and the sha256 of each header. The files that it keeps are listed in `scripts/fetch.agc` (`RELEASE_MEMBERS`); a release with
   other files needs that list changed.
 - `model`: Qwen2.5-0.5B-Instruct Q4_K_M, sha256-checked, into `deps/`. For any other public GGUF model on Hugging Face,
   pass the repo, the file and its sha256, for example `agentica scripts/fetch.agc model Qwen/Qwen2.5-1.5B-Instruct-GGUF
@@ -50,13 +51,33 @@ curl -N localhost:8080/v1/chat/completions -H 'content-type: application/json' \
 
 `"stream_options": {"include_usage": true}` adds a last chunk with the token counts.
 
-Options: `--model PATH --host H --port N --threads N --ctx N --parallel N --batch N --backends DIR --stats on|off`
+Options: `--model PATH --host H --port N --threads N --ctx N --parallel N --batch N --gpu-layers N --backends DIR --stats on|off`
 (`--name value` or `--name=value`); `--help` lists them with their defaults. A bad command line is a message on stderr
 and exit 2; a failure to load the model or to listen is `error: ...` and exit 1.
 
 llama.cpp logs a lot to stderr at start (a log callback cannot be set, see [gaps.md](gaps.md)); send it to a file.
 `--stats on` prints, every 5 s of work, how much of the engine's time went into `llama_decode` and how much into
 Agentica.
+
+## GPU
+
+`--gpu-layers N` (default 0, the CPU) offloads N layers of the model to the GPU; a number above the layer count, such as
+99, offloads all of them. It needs a build of llama.cpp with a GPU backend, and the server loads the backends from
+`--backends` (`native/linux`):
+
+```sh
+agentica scripts/fetch.agc llama --variant vulkan
+agentica server.agc --gpu-layers 99
+```
+
+`--variant vulkan` fetches the Vulkan build of the same release (it adds `libggml-vulkan.so`; the other libraries have
+the same names, so `agentica.toml` does not change). Vulkan needs a driver on the machine, for example Mesa's RADV for
+an AMD GPU or iGPU (`mesa-vulkan-drivers`). `fetch.agc llama` with no variant
+puts the CPU build back. On one AMD iGPU all 25 layers of the 0.5B model were offloaded, and the prompt
+was about 8 times faster than on the CPU.
+
+With a GPU, the `--stats` `decode_ms` is not reliable: `llama_decode` returns before the GPU is done, and the wait lands
+in `agentica_ms`. CI has no GPU: it runs the CPU build with `--gpu-layers 0`.
 
 ## Test
 

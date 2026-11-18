@@ -178,7 +178,7 @@ def test_a_location_is_resolved_against_the_url() -> Result[Void]
 end
 
 def archive_answer(bytes: Bytes, request: HTTP.Request) -> Result[HTTP.Response]
-  if request.path == "/tTest/llama-tTest-bin-ubuntu-x64.tar.gz"
+  if request.path.start_with?("/tTest/") and request.path.end_with?(".tar.gz")
     return ok(HTTP.Response(status: 200, headers: [], body: bytes))
   end
 
@@ -199,25 +199,56 @@ def make_archive(dir: String) -> Result[String]
   ok(archive)
 end
 
+## Runs `fetch.agc llama ARGS` in `dir` against a release (CPU and Vulkan archives of the same bytes) whose archive has
+## no member of the release, with old libraries in place. Returns the folder of the libraries.
+def fetch_llama_from_bad_archive(dir: String, args: List[String]) -> Result[Ran]
+  archive = try make_archive(dir)
+  bytes = try File.open(archive) do |f| File.read_bytes(f, 1_048_576) end
+  sha256 = OpenSSL.Digest.hexencode(try File.sha256(archive))
+  try Dir.mkdir(try Path.join([dir, "scripts"]))
+  try File.write_text(try Path.join([dir, "scripts", "llama-release"]), "tTest #{sha256}\nvulkan #{sha256}\n")
+  libraries = try Path.join([dir, "native", "linux"])
+  try Dir.mkdir(libraries)
+  try File.write_text(try Path.join([libraries, "TAG"]), "old")
+  try File.write_text(try Path.join([libraries, "libllama.so.1"]), "kept")
+  server = try HTTP.serve("127.0.0.1", 0, HTTP.app(->(request) { archive_answer(bytes, request) }, 1024))
+  ran = run_fetch(dir, ["llama"] + args, {"LLAMA_RELEASES": "http://127.0.0.1:#{HTTP.local_port(server)}"})
+  HTTP.close_server(server)
+  ran
+end
+
+def old_libraries_are_there(dir: String) -> Result[Void]
+  libraries = try Path.join([dir, "native", "linux"])
+  try Test.eq(try Dir.list(libraries), ["TAG", "libllama.so.1"])
+  try Test.eq(try File.read_text(try Path.join([libraries, "TAG"])), "old")
+  Test.eq(try Dir.list(try Path.join([dir, "native"])), ["linux"])
+end
+
 def test_a_failed_extraction_keeps_the_libraries_that_are_there() -> Result[Void]
   with_dir("extract") do |dir|
-    archive = try make_archive(dir)
-    bytes = try File.open(archive) do |f| File.read_bytes(f, 1_048_576) end
-    sha256 = OpenSSL.Digest.hexencode(try File.sha256(archive))
-    try Dir.mkdir(try Path.join([dir, "scripts"]))
-    try File.write_text(try Path.join([dir, "scripts", "llama-release"]), "tTest #{sha256}\n")
-    libraries = try Path.join([dir, "native", "linux"])
-    try Dir.mkdir(libraries)
-    try File.write_text(try Path.join([libraries, "TAG"]), "old")
-    try File.write_text(try Path.join([libraries, "libllama.so.1"]), "kept")
-    server = try HTTP.serve("127.0.0.1", 0, HTTP.app(->(request) { archive_answer(bytes, request) }, 1024))
-    ran = run_fetch(dir, ["llama"], {"LLAMA_RELEASES": "http://127.0.0.1:#{HTTP.local_port(server)}"})
-    HTTP.close_server(server)
-    result = try ran
-    try Test.eq(result.code, 1)
-    try Test.eq(try Dir.list(libraries), ["TAG", "libllama.so.1"])
-    try Test.eq(try File.read_text(try Path.join([libraries, "TAG"])), "old")
-    try Test.eq(try Dir.list(try Path.join([dir, "native"])), ["linux"])
-    Test.eq(try deps(dir), [])
+    ran = try fetch_llama_from_bad_archive(dir, [])
+    try Test.eq(ran.code, 1)
+    try Test.assert(ran.stdout.include?("ubuntu-x64.tar.gz: sha256 ok"), ran.stdout)
+    try Test.eq(try deps(dir), [])
+    old_libraries_are_there(dir)
+  end
+end
+
+def test_the_vulkan_variant_takes_the_vulkan_archive() -> Result[Void]
+  with_dir("vulkan") do |dir|
+    ran = try fetch_llama_from_bad_archive(dir, ["--variant", "vulkan"])
+    try Test.eq(ran.code, 1)
+    try Test.assert(ran.stdout.include?("ubuntu-vulkan-x64.tar.gz: sha256 ok"), ran.stdout)
+    try Test.eq(try deps(dir), [])
+    old_libraries_are_there(dir)
+  end
+end
+
+def test_an_unknown_variant_is_refused() -> Result[Void]
+  with_dir("variant") do |dir|
+    ran = try fetch_llama_from_bad_archive(dir, ["--variant=cuda"])
+    try Test.eq(ran.code, 1)
+    try Test.assert(ran.stderr.include?("unknown variant cuda: cpu, vulkan"), ran.stderr)
+    old_libraries_are_there(dir)
   end
 end

@@ -3,8 +3,8 @@ AGENTICA ?= agentica
 
 # The number of tests each file of tests/ has: a run that tests fewer, or nothing, fails.
 BINDINGS_TESTS = 19
-FETCH_TESTS = 10
-CLI_TESTS = 5
+FETCH_TESTS = 12
+CLI_TESTS = 6
 API_TESTS = 8
 
 .PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-cli test-api test
