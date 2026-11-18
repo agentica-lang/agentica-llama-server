@@ -153,8 +153,8 @@ def init(backend_dir: String) -> Void
   llama_backend_init()
 end
 
-def load_model(path: String) -> Result[Model]
-  model = llama_model_load_from_file(path, llama_model_default_params().with(n_gpu_layers: 0))
+def load_model(path: String, gpu_layers: Int) -> Result[Model]
+  model = llama_model_load_from_file(path, llama_model_default_params().with(n_gpu_layers: gpu_layers))
   case model
     ok(m) -> ok(m)
     error(_) -> error("cannot load the model at #{path}")

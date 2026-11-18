@@ -40,7 +40,7 @@ end
 
 def serve(options: Cli.Options) -> Result[Void]
   Llama.init(options.backends)
-  model = try Llama.load_model(options.model)
+  model = try Llama.load_model(options.model, options.gpu_layers)
   requests: Channel[Engines.GenRequest] = Channel.new(REQUEST_QUEUE)
   config = Engines.EngineConfig(
     n_ctx: options.n_ctx,

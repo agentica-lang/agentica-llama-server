@@ -2,12 +2,14 @@
 ## as a Markdown table.
 ##
 ## Each server starts under a systemd scope with a memory cap, is warmed up, then each concurrency runs `--reps`
-## times. The processes are the ones that this program started, and it stops exactly those. Run it from the repo root:
+## times. The processes are the ones that this program started, and it stops exactly those. Run it from the repo root,
+## or give the root with `--root`:
 ##
-## agentica bench/run_all.agc [--quick] [--only NAME] [--threads N] [--concurrency 1,4,16] [--stream] [--out FILE] ...
+## agentica bench/run_all.agc [--quick] [--only NAME] [--threads N] [--concurrency 1,4,16] [--stream] [--gpu-layers N]
+##                           [--llama-dir DIR] [--out FILE] ...
 ##
-## It writes the JSON of every run to `--out` (bench/results/latest.json); `agentica bench/run_all.agc --help` lists the
-## options.
+## It writes the JSON of every run to `--out` (bench/results/latest.json); `agentica bench/run_all.agc --help` lists
+## the options.
 
 import Client from "client"
 import HTTP from "std/http"
@@ -17,21 +19,21 @@ import {Kind, Opt} from "std/option_parser"
 
 def main() -> Void
   parsed = OP.run!(parse(System.args()))
-  options = options_of(parsed)
   started = Time.monotonic_ms()
-  done = run(options)
+  done = run(parsed)
   if !done.ok?
     IO.warn("run_all: #{done.message}")
     System.exit(1)
   end
 
-  puts("took #{(Time.monotonic_ms() - started) / 1000} s")
+  IO.warn("took #{(Time.monotonic_ms() - started) / 1000} s")
 end
 
 private
 
 MODEL = "deps/qwen2.5-0.5b-instruct-q4_k_m.gguf"
-LLAMA_SERVER = "native/linux/llama-server"
+LLAMA_DIR = "native/linux"
+OUT = "bench/results/latest.json"
 SCOPE = ["--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0", "--"]
 CLOCK_TICKS = 100
 
@@ -43,6 +45,9 @@ struct Options
   threads: Int
   ctx: Int
   slots: Int
+  gpu_layers: Int
+  llama_dir: String
+  root: String
   concurrencies: List[Int]
   reps: Int
   max_tokens: Int
@@ -78,6 +83,7 @@ struct Report
   threads: Int
   ctx: Int
   slots: Int
+  gpu_layers: Int
   max_tokens: Int
   reps: Int
   stream: Bool
@@ -109,6 +115,17 @@ def parse(args: List[String]) -> Result[OP.Parsed]
       Opt(name: "threads", kind: Kind.Int, help: "default: nproc (4 with --quick)"),
       Opt(name: "ctx", kind: Kind.Int, default: "8192"),
       Opt(name: "slots", kind: Kind.Int, default: "8"),
+      Opt(
+        name: "gpu-layers",
+        kind: Kind.Int,
+        default: "0",
+        help: "layers to offload to the GPU, the same for both servers (--gpu-layers and -ngl)",
+      ),
+      Opt(
+        name: "llama-dir",
+        default: "native/linux",
+        help: "the folder of llama-server (the CPU or the Vulkan build), default: native/linux under the root",
+      ),
       Opt(name: "concurrency", default: "1,4,16"),
       Opt(name: "reps", kind: Kind.Int, help: "default: 3 (2 with --quick)"),
       Opt(name: "max-tokens", kind: Kind.Int, help: "default: 64 (32 with --quick)"),
@@ -128,7 +145,8 @@ def parse(args: List[String]) -> Result[OP.Parsed]
       Opt(name: "attempts", kind: Kind.Int, default: "1", help: "tries per run for --max-load-during"),
       Opt(name: "stream", kind: Kind.Flag, help: "every request says \"stream\": true; adds time to first token"),
       Opt(name: "port", kind: Kind.Int, default: "8123"),
-      Opt(name: "out", default: "bench/results/latest.json"),
+      Opt(name: "out", help: "default: bench/results/latest.json under the root"),
+      Opt(name: "root", default: ".", help: "the repo root: server.agc, deps/ and native/linux are looked up there"),
     ],
   )
 
@@ -136,28 +154,43 @@ def parse(args: List[String]) -> Result[OP.Parsed]
 end
 
 ## An explicit value always wins; only an omitted one takes the default of its mode.
-def options_of(p: OP.Parsed) -> Options
+def options_of(p: OP.Parsed) -> Result[Options]
   quick = OP.flag(p, "quick")
+  root = try Path.real(OP.string(p, "root"))
+  llama_dir = try in_root(root, OP.string(p, "llama-dir"), LLAMA_DIR)
+  out = try in_root(root, OP.string(p, "out"), OUT)
   concurrencies = OP.string(p, "concurrency").split(",").map do |c| c.strip().to_i!() end
-  Options(
-    quick: quick,
-    agentica: OP.string(p, "agentica"),
-    only: OP.optional_string(p, "only"),
-    order: OP.string(p, "order").split(","),
-    threads: OP.optional_int(p, "threads").unwrap_or(quick_or(quick, 4, cpu_count())),
-    ctx: OP.int(p, "ctx"),
-    slots: OP.int(p, "slots"),
-    concurrencies: concurrencies,
-    reps: OP.optional_int(p, "reps").unwrap_or(quick_or(quick, 2, 3)),
-    max_tokens: OP.optional_int(p, "max-tokens").unwrap_or(quick_or(quick, 32, 64)),
-    max_load: OP.float(p, "max-load"),
-    patience: quick_or(quick, [OP.int(p, "patience"), 10].min.unwrap!(), OP.int(p, "patience")),
-    max_load_during: OP.float(p, "max-load-during"),
-    attempts: quick_or(quick, 1, OP.int(p, "attempts")),
-    stream: quick or OP.flag(p, "stream"),
-    port: OP.int(p, "port"),
-    out: OP.string(p, "out"),
+  ok(
+    Options(
+      quick: quick,
+      agentica: OP.string(p, "agentica"),
+      only: OP.optional_string(p, "only"),
+      order: OP.string(p, "order").split(","),
+      threads: OP.optional_int(p, "threads").unwrap_or(quick_or(quick, 4, cpu_count())),
+      ctx: OP.int(p, "ctx"),
+      slots: OP.int(p, "slots"),
+      gpu_layers: OP.int(p, "gpu-layers"),
+      llama_dir: llama_dir,
+      root: root,
+      concurrencies: concurrencies,
+      reps: OP.optional_int(p, "reps").unwrap_or(quick_or(quick, 2, 3)),
+      max_tokens: OP.optional_int(p, "max-tokens").unwrap_or(quick_or(quick, 32, 64)),
+      max_load: OP.float(p, "max-load"),
+      patience: quick_or(quick, [OP.int(p, "patience"), 10].min.unwrap!(), OP.int(p, "patience")),
+      max_load_during: OP.float(p, "max-load-during"),
+      attempts: quick_or(quick, 1, OP.int(p, "attempts")),
+      stream: quick or OP.flag(p, "stream"),
+      port: OP.int(p, "port"),
+      out: out,
+    ),
   )
+end
+
+## `given` when there is one, else `fallback` under the root.
+def in_root(root: String, given: String, fallback: String) -> Result[String]
+  return ok(given) if given != ""
+
+  Path.join([root, fallback])
 end
 
 def quick_or(quick: Bool, when_quick: Int, otherwise: Int) -> Int
@@ -166,9 +199,13 @@ def quick_or(quick: Bool, when_quick: Int, otherwise: Int) -> Int
   otherwise
 end
 
-def run(options: Options) -> Result[Void]
-  folder = Regex.replace(options.out, /\/[^\/]*$/, "").unwrap!
-  try Dir.mkdir(folder)
+def run(parsed: OP.Parsed) -> Result[Void]
+  options = try options_of(parsed)
+  folder = folder_of(options.out)
+  if folder != "."
+    try Dir.mkdir(folder)
+  end
+
   servers = try start_all(options, folder)
   measured = bench(options, servers)
   for s in servers
@@ -180,6 +217,7 @@ def run(options: Options) -> Result[Void]
     threads: options.threads,
     ctx: options.ctx,
     slots: options.slots,
+    gpu_layers: options.gpu_layers,
     max_tokens: options.max_tokens,
     reps: options.reps,
     stream: options.stream,
@@ -192,6 +230,13 @@ def run(options: Options) -> Result[Void]
   try File.write_text(options.out, JSON.encode(report))
   puts(table(results))
   ok()
+end
+
+## The folder of a path: `.` for a bare file name.
+def folder_of(path: String) -> String
+  return "." if !path.include?("/")
+
+  Regex.replace(path, /\/[^\/]*$/, "").unwrap!
 end
 
 # --- the servers
@@ -222,16 +267,53 @@ def command(options: Options, name: String, port: Int) -> Result[List[String]]
   threads = options.threads.to_s
   slots = options.slots.to_s
   ctx = options.ctx.to_s
+  layers = options.gpu_layers.to_s
   case name
     "agentica" ->
       ok([
-        options.agentica, "server.agc", "--port", port.to_s, "--threads", threads, "--ctx", ctx, "--parallel", slots,
-        "--batch", "2048",
+        options.agentica,
+        "#{options.root}/server.agc",
+        "--port",
+        port.to_s,
+        "--threads",
+        threads,
+        "--ctx",
+        ctx,
+        "--parallel",
+        slots,
+        "--batch",
+        "2048",
+        "--gpu-layers",
+        layers,
       ])
     "llama-server" ->
       ok([
-        LLAMA_SERVER, "-m", MODEL, "--host", "127.0.0.1", "--port", port.to_s, "-t", threads, "-tb", threads, "-c",
-        ctx, "-np", slots, "-b", "2048", "-ub", "512", "--no-webui", "--no-cache-prompt", "-cram", "0", "--no-warmup",
+        "#{options.llama_dir}/llama-server",
+        "-m",
+        "#{options.root}/#{MODEL}",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        port.to_s,
+        "-t",
+        threads,
+        "-tb",
+        threads,
+        "-c",
+        ctx,
+        "-np",
+        slots,
+        "-ngl",
+        layers,
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "--no-webui",
+        "--no-cache-prompt",
+        "-cram",
+        "0",
+        "--no-warmup",
       ])
     _ -> error("unknown server #{name}: agentica or llama-server")
   end
@@ -240,9 +322,14 @@ end
 def start(options: Options, name: String, port: Int, folder: String) -> Result[Server]
   words = try command(options, name, port)
   log = try Path.join([folder, "#{name}.log"])
-  process = try Process.spawn("systemd-run", SCOPE + words, Process.Options(timeout_ms: 3_600_000, out: log, err: log))
+  process = try Process.spawn(
+    "systemd-run",
+    SCOPE + words,
+    Process.Options(timeout_ms: 3_600_000, chdir: options.root, out: log, err: log),
+  )
+
   # `systemd-run --scope` execs the command: the child of this program is the server itself.
-  pid = try find_pid(port)
+  pid = try find_pid(process, name, port, log)
   extra: Map[String, JSON.Value] = {}
   if name == "llama-server"
     extra = {"cache_prompt": JSON.from(false)}
@@ -252,23 +339,26 @@ def start(options: Options, name: String, port: Int, folder: String) -> Result[S
 end
 
 ## The child of this program that was started with `--port PORT` (Agentica has no `Process.pid`).
-def find_pid(port: Int) -> Result[Int]
-  needle = String.from_code(0) + port.to_s + String.from_code(0)
+def find_pid(process: Process, name: String, port: Int, log: String) -> Result[Int]
+  nul = String.from_code(0)
+  needle = "--port#{nul}#{port}#{nul}"
   for _ in 0...100
-    for name in try Dir.list("/proc")
-      next if !Regex.match?(name, /^\d+$/)
+    for entry in try Dir.list("/proc")
+      next if !Regex.match?(entry, /^\d+$/)
 
-      stat = File.read_text("/proc/#{name}/stat")
-      cmdline = File.read_text("/proc/#{name}/cmdline")
+      stat = File.read_text("/proc/#{entry}/stat")
+      cmdline = File.read_text("/proc/#{entry}/cmdline")
       if stat.ok? and cmdline.ok? and parent_of(stat.unwrap!) == System.pid() and cmdline.unwrap!.include?(needle)
-        return ok(name.to_i!())
+        return ok(entry.to_i!())
       end
     end
+
+    return error("#{name} exited at its start, see #{log}") if Process.wait(process, 1).ok?
 
     Task.sleep(50)
   end
 
-  error("the process of the server on port #{port} was not found")
+  error("the process of #{name} on port #{port} was not found, see #{log}")
 end
 
 def parent_of(stat: String) -> Int
@@ -353,8 +443,8 @@ def wait_quiet(max_busy: Float, patience_s: Int, window_ms: Int) -> Float
   busy
 end
 
-## One client run, plus the cores the *neighbours* used during it: the machine's busy cores over the run, minus what the
-## server and this client process used. A check before the run does not see a neighbour that starts during it.
+## One client run, plus the cores the *neighbours* used during it: the machine's busy cores over the run, minus what
+## the server and this client process used. A check before the run does not see a neighbour that starts during it.
 def run_measured(server: Server, options: Options, concurrency: Int, total: Int) -> Result[Client.RunResult]
   before = system_jiffies()
   server_before = process_jiffies(server.pid.to_s)

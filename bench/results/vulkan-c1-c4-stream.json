@@ -1,0 +1,129 @@
+{
+ "threads": 4,
+ "ctx": 8192,
+ "slots": 8,
+ "max_tokens": 32,
+ "reps": 1,
+ "stream": true,
+ "quick": false,
+ "max_load": 1000000000.0,
+ "max_load_during": 1000000000.0,
+ "results": {
+  "agentica": {
+   "runs": {
+    "1": [
+     {
+      "concurrency": 1,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 14.093389603076503,
+      "req_per_s": 1.1352840197156897,
+      "gen_tok_per_s": 36.32908863090207,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 0.849869720521383,
+      "p95_s": 0.9962008209549822,
+      "ttft_p50_s": 0.09601964557077736,
+      "ttft_p95_s": 0.12725008599227294,
+      "neighbour_cores_during": 2.216240628669497,
+      "busy_cores_before": 4.588832487309645,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "4": [
+     {
+      "concurrency": 4,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 7.0259985260199755,
+      "req_per_s": 2.277256384376661,
+      "gen_tok_per_s": 72.87220430005316,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 1.7618776095332578,
+      "p95_s": 1.7843120851903223,
+      "ttft_p50_s": 0.37529457500204444,
+      "ttft_p95_s": 0.4253911494743079,
+      "neighbour_cores_during": 1.6916681727814928,
+      "busy_cores_before": 2.5948685460880583,
+      "attempts": 1,
+      "discarded": []
+     }
+    ]
+   },
+   "rss_idle_mb": 157.8828125,
+   "texts": {
+    "0": "A hash table is a data structure that allows for efficient storage and retrieval of data. It works by using a hash function to map each key to a unique index",
+    "1": "As the sun set over the horizon, the lighthouse keeper stood at his desk, his eyes fixed on the vast ocean beyond. He had been working at the",
+    "2": "The French Revolution was a period of political upheaval and social transformation that began in 1789 and lasted until 1799. The main",
+    "3": "The water cycle is a continuous process that involves the movement of water on, above, and below the surface of the Earth. It is a crucial part of the",
+    "4": "Sure, here's a recipe for a simple vegetable soup:\n\nIngredients:\n- 2 lbs of vegetables (such as carrots, potatoes, and onions)\n- ",
+    "5": "A binary search is a search algorithm that works by dividing the search space in half at each step. Here's an example of how it works:\n\nSuppose we",
+    "6": "The sky is blue because it is made up of tiny particles of nitrogen and oxygen gas. When these particles are heated, they expand and become lighter, creating the",
+    "7": "Learning a new language can be a challenging but rewarding experience. Here are some tips that can help you learn a new language:\n\n1. Start with a beginner level"
+   },
+   "batched_same": 7,
+   "rss_peak_mb": 220.28515625,
+   "rss_end_mb": 220.28515625
+  },
+  "llama-server": {
+   "runs": {
+    "1": [
+     {
+      "concurrency": 1,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 15.827101353090256,
+      "req_per_s": 1.0109242142987847,
+      "gen_tok_per_s": 32.34957485756111,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 0.9889150350354612,
+      "p95_s": 1.0476738380966708,
+      "ttft_p50_s": 0.11342250101733953,
+      "ttft_p95_s": 0.1371446069679223,
+      "neighbour_cores_during": 3.564840109272055,
+      "busy_cores_before": 2.10925165772024,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "4": [
+     {
+      "concurrency": 4,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 6.940014329040423,
+      "req_per_s": 2.305470744209872,
+      "gen_tok_per_s": 73.7750638147159,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 1.7342673559905961,
+      "p95_s": 1.8196365890908055,
+      "ttft_p50_s": 0.38871024502441287,
+      "ttft_p95_s": 0.4421896729618311,
+      "neighbour_cores_during": 1.5621908774500823,
+      "busy_cores_before": 1.367888748419722,
+      "attempts": 1,
+      "discarded": []
+     }
+    ]
+   },
+   "rss_idle_mb": 143.7109375,
+   "texts": {
+    "0": "A hash table is a data structure that allows for efficient storage and retrieval of data. It works by using a hash function to map each key to a unique index",
+    "1": "As the sun set over the horizon, the lighthouse keeper stood at his desk, his eyes fixed on the vast ocean beyond. He had been working at the",
+    "2": "The French Revolution was a period of political upheaval and social transformation that began in 1789 and lasted until 1799. The main",
+    "3": "The water cycle is a continuous process that involves the movement of water on, above, and below the surface of the Earth. It is a crucial part of the",
+    "4": "Sure, here's a recipe for a simple vegetable soup:\n\nIngredients:\n- 2 lbs of vegetables (such as carrots, potatoes, and onions)\n- ",
+    "5": "A binary search is a search algorithm that works by dividing the search space in half at each step. Here's an example of how it works:\n\nSuppose we",
+    "6": "The sky is blue because it is made up of tiny particles of nitrogen and oxygen gas. When these particles are heated, they expand and become lighter, creating the",
+    "7": "Learning a new language can be a challenging but rewarding experience. Here are some tips that can help you learn a new language:\n\n1. Start with a beginner level"
+   },
+   "batched_same": 8,
+   "rss_peak_mb": 161.0703125,
+   "rss_end_mb": 161.0703125
+  }
+ }
+}

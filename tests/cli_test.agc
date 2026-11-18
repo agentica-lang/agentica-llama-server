@@ -26,11 +26,18 @@ end
 def test_help_lists_every_option_and_exits_0() -> Result[Void]
   ran = try server(["--help"])
   try Test.eq(ran.code, 0)
-  for name in ["model", "backends", "host", "port", "threads", "ctx", "parallel", "batch", "stats"]
+  for name in ["model", "backends", "host", "port", "threads", "ctx", "parallel", "batch", "gpu-layers", "stats"]
     try says(ran.stdout, "--#{name}")
   end
 
-  says(ran.stdout, "[default: 8080]")
+  try says(ran.stdout, "[default: 8080]")
+  says(ran.stdout, "[default: 0]")
+end
+
+def test_gpu_layers_takes_an_integer() -> Result[Void]
+  ran = try server(["--gpu-layers", "all"])
+  try Test.eq(ran.code, 2)
+  says(ran.stderr, "invalid value for --gpu-layers: 'all' is not an Int")
 end
 
 def test_a_bad_value_names_the_option_and_exits_2() -> Result[Void]
@@ -51,11 +58,12 @@ def test_an_unknown_option_exits_2() -> Result[Void]
   says(ran.stderr, "unknown option --bogus")
 end
 
-## Every flag in one of its forms; the command line is accepted, so the run fails at the missing model.
-def test_valid_flags_reach_the_model_load() -> Result[Void]
+## Every flag in one of its forms: the command line is accepted, so the run goes on to the load and fails at the
+## missing model.
+def test_the_flags_are_accepted() -> Result[Void]
   flags = [
     "--model", "/nonexistent.gguf", "--backends", "native/linux", "--host", "127.0.0.1", "--port=0", "--threads", "2",
-    "--ctx", "4096", "--parallel", "4", "--batch", "512", "--stats", "on",
+    "--ctx", "4096", "--parallel", "4", "--batch", "512", "--gpu-layers", "99", "--stats", "on",
   ]
 
   ran = try server(flags)

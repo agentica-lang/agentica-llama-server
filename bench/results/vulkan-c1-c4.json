@@ -1,0 +1,185 @@
+{
+ "threads": 4,
+ "ctx": 8192,
+ "slots": 8,
+ "max_tokens": 32,
+ "reps": 2,
+ "stream": false,
+ "quick": false,
+ "max_load": 1000000000.0,
+ "max_load_during": 1000000000.0,
+ "results": {
+  "agentica": {
+   "runs": {
+    "1": [
+     {
+      "concurrency": 1,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 11.660037593916059,
+      "req_per_s": 1.3722082687236303,
+      "gen_tok_per_s": 43.91066459915617,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 0.6952188415452838,
+      "p95_s": 0.8443480335408822,
+      "neighbour_cores_during": 1.1437288874359812,
+      "busy_cores_before": 1.7659033078880406,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 1,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 17.245638186112046,
+      "req_per_s": 0.9277708268798563,
+      "gen_tok_per_s": 29.688666460155403,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 1.0802649173419923,
+      "p95_s": 1.1674741107271984,
+      "neighbour_cores_during": 6.111471542317901,
+      "busy_cores_before": 3.6453451551614946,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "4": [
+     {
+      "concurrency": 4,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 9.704292010050267,
+      "req_per_s": 1.6487550027791384,
+      "gen_tok_per_s": 52.76016008893243,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 2.421513232518919,
+      "p95_s": 2.4799657716066577,
+      "neighbour_cores_during": 7.162462423212652,
+      "busy_cores_before": 7.056436271401395,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 4,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 8.619974789908156,
+      "req_per_s": 1.8561539203956856,
+      "gen_tok_per_s": 59.39692545266194,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 2.1333385915495455,
+      "p95_s": 2.188291947415564,
+      "neighbour_cores_during": 4.499925871015567,
+      "busy_cores_before": 4.62415892342198,
+      "attempts": 1,
+      "discarded": []
+     }
+    ]
+   },
+   "rss_idle_mb": 267.35546875,
+   "texts": {
+    "0": "A hash table is a data structure that allows for efficient storage and retrieval of data. It works by using a hash function to map each key to a unique index",
+    "1": "As the sun set over the horizon, the lighthouse keeper stood at his desk, his eyes fixed on the vast ocean beyond. He had been working at the",
+    "2": "The French Revolution was a period of political upheaval and social transformation that began in 1789 and lasted until 1799. The main",
+    "3": "The water cycle is a continuous process that involves the movement of water on, above, and below the surface of the Earth. It is a crucial part of the",
+    "4": "Sure, here's a recipe for a simple vegetable soup:\n\nIngredients:\n- 2 lbs of vegetables (such as carrots, potatoes, and onions)\n- ",
+    "5": "A binary search is a search algorithm that works by dividing the search space in half at each step. Here's an example of how it works:\n\nSuppose we",
+    "6": "The sky is blue because it is made up of tiny particles of nitrogen and oxygen gas. When these particles are heated, they expand and become lighter, creating the",
+    "7": "Learning a new language can be a challenging but rewarding experience. Here are some tips that can help you learn a new language:\n\n1. Start with a beginner level"
+   },
+   "batched_same": 7,
+   "rss_peak_mb": 345.62890625,
+   "rss_end_mb": 345.62890625
+  },
+  "llama-server": {
+   "runs": {
+    "1": [
+     {
+      "concurrency": 1,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 16.194609285099432,
+      "req_per_s": 0.9879830824150546,
+      "gen_tok_per_s": 31.615458637281748,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 1.0109757744939998,
+      "p95_s": 1.0765180397429504,
+      "neighbour_cores_during": 4.538545738858483,
+      "busy_cores_before": 1.1996179560649474,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 1,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 16.52242663805373,
+      "req_per_s": 0.9683807560778935,
+      "gen_tok_per_s": 30.988184194492593,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 1.0535513329086825,
+      "p95_s": 1.1180375386611558,
+      "neighbour_cores_during": 5.013872920978002,
+      "busy_cores_before": 4.0456852791878175,
+      "attempts": 1,
+      "discarded": []
+     }
+    ],
+    "4": [
+     {
+      "concurrency": 4,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 10.321397813037038,
+      "req_per_s": 1.5501776299902206,
+      "gen_tok_per_s": 49.60568415968706,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 2.541845489991829,
+      "p95_s": 2.993520851363428,
+      "neighbour_cores_during": 4.7292105589292355,
+      "busy_cores_before": 7.570435881238155,
+      "attempts": 1,
+      "discarded": []
+     },
+     {
+      "concurrency": 4,
+      "requests": 16,
+      "failures": 0,
+      "wall_s": 10.261083791032434,
+      "req_per_s": 1.559289479146738,
+      "gen_tok_per_s": 49.897263332695616,
+      "completion_tokens": 512,
+      "prompt_tokens": 444,
+      "p50_s": 2.568014076561667,
+      "p95_s": 2.9295704035903327,
+      "neighbour_cores_during": 4.659691081215745,
+      "busy_cores_before": 4.658552210121717,
+      "attempts": 1,
+      "discarded": []
+     }
+    ]
+   },
+   "rss_idle_mb": 143.83984375,
+   "texts": {
+    "0": "A hash table is a data structure that allows for efficient storage and retrieval of data. It works by using a hash function to map each key to a unique index",
+    "1": "As the sun set over the horizon, the lighthouse keeper stood at his desk, his eyes fixed on the vast ocean beyond. He had been working at the",
+    "2": "The French Revolution was a period of political upheaval and social transformation that began in 1789 and lasted until 1799. The main",
+    "3": "The water cycle is a continuous process that involves the movement of water on, above, and below the surface of the Earth. It is a crucial part of the",
+    "4": "Sure, here's a recipe for a simple vegetable soup:\n\nIngredients:\n- 2 lbs of vegetables (such as carrots, potatoes, and onions)\n- ",
+    "5": "A binary search is a search algorithm that works by dividing the search space in half at each step. Here's an example of how it works:\n\nSuppose we",
+    "6": "The sky is blue because it is made up of tiny particles of nitrogen and oxygen gas. When these particles are heated, they expand and become lighter, creating the",
+    "7": "Learning a new language can be a challenging but rewarding experience. Here are some tips that can help you learn a new language:\n\n1. Start with a beginner level"
+   },
+   "batched_same": 7,
+   "rss_peak_mb": 185.83984375,
+   "rss_end_mb": 185.83984375
+  }
+ }
+}

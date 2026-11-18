@@ -68,7 +68,7 @@ end
 
 def serve() -> Result[Void]
   port = try free_port()
-  args = ["server.agc", "--port", port.to_s, "--threads", "2", "--parallel", "4", "--ctx", "4096"]
+  args = ["server.agc", "--port", port.to_s, "--threads", "2", "--parallel", "4", "--ctx", "4096", "--gpu-layers", "0"]
   options = Process.Options(timeout_ms: TIMEOUT_MS, out: LOG, err: LOG)
   server = try Process.spawn(System.env("AGENTICA").unwrap_or("agentica"), args, options)
   try wait_ready(server, port)
@@ -172,6 +172,13 @@ def events(body: String) -> Result[List[String]]
   ok(blocks.map do |b| b.slice(6, b.length - 6) end)
 end
 
+## The text of the delta of the chunk before the usage chunk, as the server wrote it.
+def final_delta(data: List[String]) -> Result[String]
+  chunk = try JSON.parse(data[data.size - 3])
+  choice = try JSON.at(try JSON.get(chunk, "choices"), 0)
+  ok(JSON.encode(try JSON.get(choice, "delta")))
+end
+
 ## The chunks of a stream: its events without the final `[DONE]`.
 def decode_chunks(data: List[String]) -> Result[List[Chunk]]
   chunks: List[Chunk] = []
@@ -228,7 +235,7 @@ def check_stream_chunks(port: Int) -> Result[Void]
   usage = chunks[chunks.size - 1]
   try Test.eq(first.delta.role, some("assistant"))
   try Test.assert(first.finish_reason.none?, "the first chunk has a finish_reason")
-  try Test.assert(last.delta.role.none? and last.delta.content.none?, "the last delta is not empty")
+  try Test.eq(try final_delta(data), "{}")
   try Test.eq(last.finish_reason, some(whole.choices[0].finish_reason))
   try Test.eq(usage.choices.size, 0)
   try Test.eq(usage.usage, some(whole.usage))

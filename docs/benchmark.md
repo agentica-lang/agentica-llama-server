@@ -63,6 +63,33 @@ agentica bench/run_all.agc --agentica /path/to/agentica --threads 4 --max-load 1
 agentica bench/run_all.agc ... --stream      # adds time to first token
 ```
 
+## Vulkan
+
+The same two servers on a GPU, with the Vulkan build of the same llama.cpp release for both. Fetch it into the folder
+the Agentica server loads its backends from, and give both servers the same number of layers:
+
+```sh
+agentica scripts/fetch.agc llama --variant vulkan
+agentica bench/run_all.agc --gpu-layers 99 --concurrency 1,4 --reps 2 --max-tokens 32 --out bench/results/vulkan.json
+```
+
+`--gpu-layers N` is `--gpu-layers N` for the Agentica server and `-ngl N` for llama-server; `--llama-dir DIR` is the
+folder of the `llama-server` to compare with (`native/linux` by default, which is where `fetch.agc` puts the Vulkan
+one). It needs `libvulkan1` and a driver such as Mesa's RADV. Medians of 1 to 2 reps on an AMD iGPU (RADV RAVEN),
+Qwen2.5-0.5B Q4_K_M, 4 threads, 8 slots, 32 tokens (full numbers, RSS and the caveats in
+[bench/results/vulkan-c1-c4.md](../bench/results/vulkan-c1-c4.md)):
+
+| conc | mode | agentica tok/s | llama.cpp tok/s | ratio |
+|---|---|---|---|---|
+| 1 | non-streaming | 36.8 | 31.3 | 1.18 |
+| 4 | non-streaming | 56.1 | 49.8 | 1.13 |
+| 1 | streaming | 36.3 | 32.3 | 1.12 |
+| 4 | streaming | 72.9 | 73.8 | 0.99 |
+
+Time to first token at concurrency 1 is 0.10 s against 0.11 s, and the greedy answers of the two servers are identical
+on 8 of 8 prompts. It is **one machine, noisy (a load average of about 4), 1 to 2 reps**: differences under about 10 %
+are noise, so this is parity on a GPU.
+
 ## Results without streaming
 
 Medians of 3 runs. Ratio = agentica-llama-server / llama-server.
@@ -161,8 +188,9 @@ No request failed in any run.
 
 **Not rerun**: this is the 0.19.0-beta.1 result (Bond 0.2.0, capped CPU), kept in
 [bench/results/0.19.0-beta.1/health.json](../bench/results/0.19.0-beta.1/health.json). Medians of 3 runs. Measured by
-hand, not by `run_all.agc` (a Python script then, `bench/client.agc` now, with the same options): both servers started with `taskset -c 0-3` (4 threads, `-c 8192`, 8 slots), then
-`bench/client.agc --url URL --concurrency N --requests 3000 --health` for each server and concurrency, three times in turn.
+hand, not by `run_all.agc` (a Python script then, `bench/client.agc` now, with the same options): both servers started
+with `taskset -c 0-3` (4 threads, `-c 8192`, 8 slots), then `bench/client.agc --url URL --concurrency N --requests 3000
+--health` for each server and concurrency, three times in turn.
 
 | server | concurrency | req/s | p50 ms | p95 ms |
 |---|---|---|---|---|

@@ -1,16 +1,17 @@
 ## Fetches what the project does not commit, from the repo root:
 ##
-##   agentica scripts/fetch.agc llama     the prebuilt CPU llama.cpp release into native/linux
+##   agentica scripts/fetch.agc llama [--variant vulkan]   the prebuilt llama.cpp release (CPU, or with the Vulkan
+##                                        backend for a GPU) into native/linux
 ##   agentica scripts/fetch.agc headers   llama.h and the headers it includes into deps/headers
 ##   agentica scripts/fetch.agc model [REPO FILE SHA256]   a GGUF model from Hugging Face into deps/
-##   agentica scripts/fetch.agc all       the three, with the default model
+##   agentica scripts/fetch.agc all       the three, with the CPU release and the default model
 ##
-## The release is the one of scripts/llama-release: the build tag and the sha256 of its Linux x86_64 archive, then
-## the sha256 of each header. The default model is the one of scripts/model. A download follows redirects (never from
-## https to http), and nothing takes its final name before its sha256 is checked. Each step skips what it already has.
-## HF_ENDPOINT (as for the Hugging Face tools) replaces https://huggingface.co, and LLAMA_RELEASES the folder of the
-## release downloads on GitHub (both are for tests). It does not import the bindings, so it runs before the libraries
-## that the manifest names exist.
+## The release is the one of scripts/llama-release: the build tag and the sha256 of its Linux x86_64 archive, the
+## sha256 of the archive of each other variant, then the sha256 of each header. The default model is the one of
+## scripts/model. A download follows redirects (never from https to http), and nothing takes its final name before
+## its sha256 is checked. Each step skips what it already has. HF_ENDPOINT (as for the Hugging Face tools) replaces
+## https://huggingface.co, and LLAMA_RELEASES the folder of the release downloads on GitHub (both are for tests). It
+## does not import the bindings, so it runs before the libraries that the manifest names exist.
 
 import Archive from "std/archive"
 import HTTP from "std/http"
@@ -48,6 +49,12 @@ def downgrade?(from: String, to: String) -> Bool
   from.downcase().start_with?("https:") and !to.downcase().start_with?("https:")
 end
 
+## Whether a failure may pass: a network or protocol failure, or a 5xx. A refusal (a 404, a bad redirect, no Range, a
+## proxy that refuses) will not.
+def transient?(message: String) -> Bool
+  message.include?(": HTTP 5") or TRANSIENT.any? do |m| message.start_with?(m) end
+end
+
 private
 
 RELEASE_FILE = "scripts/llama-release"
@@ -69,6 +76,10 @@ WRITE_BYTES = 1_048_576
 TRANSIENT = [
   "network: connection failed",
   "network: operation timed out",
+  "network: host not found",
+  "network: TLS connect failed",
+  "network: TLS handshake failed",
+  "network: end of input",
   "http: connection failed",
   "http: connection closed before the response was complete",
   "http: truncated HTTP body",
@@ -102,37 +113,46 @@ RELEASE_MEMBERS = [
   "libggml-cpu-zen4.so",
 ]
 
+# What the Vulkan build adds. The GPU backend is a library that ggml loads from the same folder.
+VULKAN_MEMBERS = ["libggml-vulkan.so"]
+
 ## A file and the sha256 it must have.
 struct Pin
   name: String
   sha256: String
 end
 
+## The archives by variant (`cpu`, `vulkan`) and the headers of a release.
 struct Release
   tag: String
-  archive: Pin
+  archives: Map[String, String]
   headers: List[Pin]
 end
 
 def run(args: List[String]) -> Result[Void]
-  return error("usage: agentica scripts/fetch.agc llama | headers | model [REPO FILE SHA256] | all") if args.empty?
+  if args.empty?
+    return error(
+      "usage: agentica scripts/fetch.agc llama [--variant vulkan] | headers | model [REPO FILE SHA256] | all",
+    )
+  end
 
   case args[0]
-    "llama" -> fetch_llama()
+    "llama" -> fetch_llama(args.drop(1))
     "headers" -> fetch_headers()
     "model" -> fetch_model(args.drop(1))
-    "all" -> fetch_all()
+    "all" -> fetch_all(args.drop(1))
     _ -> error("unknown step #{args[0]}: llama, headers, model or all")
   end
 end
 
-def fetch_all() -> Result[Void]
-  try fetch_llama()
+def fetch_all(args: List[String]) -> Result[Void]
+  try fetch_llama(args)
   try fetch_headers()
   fetch_model([])
 end
 
-## `scripts/llama-release`: `TAG ARCHIVE_SHA256`, then a `PATH SHA256` line for each header.
+## `scripts/llama-release`: `TAG ARCHIVE_SHA256`, a `VARIANT ARCHIVE_SHA256` line for each other variant, then a
+## `PATH SHA256` line for each header.
 def read_release() -> Result[Release]
   lines = (try File.read_text(RELEASE_FILE)).split("\n").select do |l| l.strip() != "" end
   return error("#{RELEASE_FILE} is empty") if lines.empty?
@@ -141,34 +161,50 @@ def read_release() -> Result[Release]
   return error("#{RELEASE_FILE}: the first line is `TAG SHA256`") if first.size != 2
 
   pins: List[Pin] = []
+  archives = {"cpu": first[1]}
   for line in lines.drop(1)
     words = line.split(" ")
     return error("#{RELEASE_FILE}: `#{line}` is not `PATH SHA256`") if words.size != 2
 
-    pins = pins.push(Pin(name: words[0], sha256: words[1]))
+    if words[0].include?("/")
+      pins = pins.push(Pin(name: words[0], sha256: words[1]))
+    else
+      return error("#{RELEASE_FILE}: `#{line}`: cpu is the first line") if words[0] == "cpu"
+      return error("#{RELEASE_FILE}: `#{line}`: variant #{words[0]} twice") if archives.key?(words[0])
+
+      archives = archives.put(words[0], words[1])
+    end
   end
 
-  ok(
-    Release(
-      tag: first[0],
-      archive: Pin(name: "llama-#{first[0]}-bin-ubuntu-x64.tar.gz", sha256: first[1]),
-      headers: pins,
-    ),
-  )
+  ok(Release(tag: first[0], archives: archives, headers: pins))
 end
 
 # --- the release
 
-def fetch_llama() -> Result[Void]
+def fetch_llama(args: List[String]) -> Result[Void]
   release = try read_release()
-  return already("already fetched: #{LIBRARIES}") if current?(LIBRARIES, release.tag)
+  variant = try variant_of(args, release)
+  stamp = release.tag
+  if variant != "cpu"
+    stamp = "#{release.tag} #{variant}"
+  end
 
+  return already("already fetched: #{LIBRARIES}") if current?(LIBRARIES, stamp)
+
+  platform = "ubuntu-x64"
+  members = RELEASE_MEMBERS
+  if variant == "vulkan"
+    platform = "ubuntu-vulkan-x64"
+    members = RELEASE_MEMBERS + VULKAN_MEMBERS
+  end
+
+  name = "llama-#{release.tag}-bin-#{platform}.tar.gz"
   try Dir.mkdir(DOWNLOADS)
-  archive = "#{DOWNLOADS}/#{release.archive.name}"
+  archive = "#{DOWNLOADS}/#{name}"
   releases = Regex.replace(System.env("LLAMA_RELEASES").unwrap_or(RELEASES), /\/+$/, "").unwrap!
-  url = "#{releases}/#{release.tag}/#{release.archive.name}"
-  installed = case download_checked(url, archive, release.archive.sha256)
-    ok(_) -> install_release(archive, release.tag)
+  url = "#{releases}/#{release.tag}/#{name}"
+  installed = case download_checked(url, archive, release.archives[variant])
+    ok(_) -> install_release(archive, release.tag, members, stamp)
     error(e) -> error(e.message)
   end
 
@@ -176,30 +212,52 @@ def fetch_llama() -> Result[Void]
   installed
 end
 
-## The archive is extracted into a scratch folder and the libraries are put together in a new one, which takes the place
-## of the old libraries last, so a failure leaves the libraries that are there.
-def install_release(archive: String, tag: String) -> Result[Void]
+## `--variant NAME` (or `--variant=NAME`) of the words after `llama`: `cpu` when there is none.
+def variant_of(args: List[String], release: Release) -> Result[String]
+  variant = "cpu"
+  if args.size == 2 and args[0] == "--variant"
+    variant = args[1]
+  elsif args.size == 1 and args[0].start_with?("--variant=")
+    variant = args[0].slice(10, args[0].length - 10)
+  elsif !args.empty?
+    return error("usage: agentica scripts/fetch.agc llama [--variant NAME]")
+  end
+
+  return error("unknown variant #{variant}: #{release.archives.keys.join(", ")}") if !release.archives.key?(variant)
+
+  ok(variant)
+end
+
+## The archive is extracted into a scratch folder and the libraries are put together in a new one, which takes the
+## place of the old libraries last, so a failure leaves the libraries that are there.
+def install_release(archive: String, tag: String, members: List[String], stamp: String) -> Result[Void]
   scratch = "#{DOWNLOADS}/llama-#{tag}"
   fresh = "#{LIBRARIES}.new"
   _ = Path.remove(scratch)
   _ = Path.remove(fresh)
-  built = build_libraries(archive, tag, scratch, fresh)
+  built = build_libraries(archive, tag, members, scratch, fresh)
   _ = Path.remove(scratch)
   try cleaning(built, fresh)
+  try File.write_text("#{fresh}/TAG", stamp)
   _ = Path.remove(LIBRARIES)
   Path.rename(fresh, LIBRARIES)
 end
 
-def build_libraries(archive: String, tag: String, scratch: String, fresh: String) -> Result[Void]
-  members = RELEASE_MEMBERS.map do |m| "llama-#{tag}/#{m}" end
-  try Archive.extract_tar(archive, members, scratch)
+def build_libraries(
+  archive: String,
+  tag: String,
+  members: List[String],
+  scratch: String,
+  fresh: String,
+) -> Result[Void]
+  paths = members.map do |m| "llama-#{tag}/#{m}" end
+  try Archive.extract_tar(archive, paths, scratch)
   try Dir.mkdir(fresh)
-  for name in RELEASE_MEMBERS
+  for name in members
     try Path.rename("#{scratch}/llama-#{tag}/#{name}", "#{fresh}/#{soname(name)}")
   end
 
-  try executable("#{fresh}/llama-server")
-  File.write_text("#{fresh}/TAG", tag)
+  executable("#{fresh}/llama-server")
 end
 
 ## The extraction writes private files without the execute bit, and Agentica has no chmod.
@@ -321,11 +379,6 @@ def attempt(url: String, path: String, left: Int) -> Result[Void]
 
   IO.warn("fetch: #{done.message}, trying again")
   attempt(url, path, left - 1)
-end
-
-## A network or protocol failure, or a 5xx, may pass; a refusal (a 404, a bad redirect, no Range) will not.
-def transient?(message: String) -> Bool
-  message.include?(": HTTP 5") or TRANSIENT.any? do |m| message.start_with?(m) end
 end
 
 def get(url: String, path: String) -> Result[Void]
