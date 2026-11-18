@@ -16,7 +16,7 @@ fmt-check:
 # The structs and functions of llama.agc against the llama.cpp headers, and their sizes against the C compiler's.
 # Needs scripts/fetch-headers.sh and scripts/fetch-llama.sh.
 check-bindings:
-	AGENTICA=$(AGENTICA) python3 scripts/check-bindings.py
+	$(AGENTICA) scripts/check_bindings.agc
 
 # Needs scripts/fetch-llama.sh, scripts/fetch-headers.sh and scripts/fetch-model.sh.
 test:

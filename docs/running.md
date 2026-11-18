@@ -20,7 +20,8 @@ agentica install
   `deps/headers`. The release archive ships no headers, and the structs and signatures of `src/llama_server/llama.agc`
   are copied from `llama.h`. A wrong field list is undefined behavior, so `make check-bindings` (after this script and
   `scripts/fetch-llama.sh`) compares them: the field names, order and C types of each bound struct, the parameters and
-  result of each bound function, and the size of each struct with the `sizeof` of the C compiler. Run it when you change
+  result of each bound function, and the size of each struct with the `sizeof` of the C compiler (`cc`, or
+  `agentica scripts/check_bindings.agc --skip-sizes` without one). The check is `scripts/check_bindings.agc`. Run it when you change
   the tag (`scripts/llama-tag`, which both fetch scripts read; `fetch-llama.sh` also needs the new sha256); CI runs it.
 - `agentica install`: Bond 0.15.1 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
   `agentica.lock`).
