@@ -41,7 +41,9 @@ Closed since the first version:
   the server it started from `/proc/PID`, scans `/proc` for the child of `System.pid()` whose command line has the port.
   `Process.pid(p)` would do.
 - **A program cannot learn its own path.** `bench/run_all.agc` finds `server.agc`, `deps/` and `native/linux` from the
-  current folder, or from `--root DIR`; a `System.script_path()` would let it find them from its own folder.
+  current folder, or from `--root DIR` (a relative `--out`, `--llama-dir` or `--agentica` with a `/` is relative to the
+  root too); [agentica#1869](https://github.com/agentica-lang/agentica/issues/1869) (`System.program_name`) would let it
+  find them from its own folder.
 - **`Int` has no `min` or `max`.** `n_batch.min(512)` is `CHECK-UNKNOWN-METHOD: Int has no method "min"`.
   Agentica 0.23.0 added `n.clamp(lo, hi)` and `[a, b].min.unwrap!`, but a clamp needs a lower bound that the call
   sites do not have and the list form allocates on the engine's step path, so `src/llama_server/numbers.agc` keeps

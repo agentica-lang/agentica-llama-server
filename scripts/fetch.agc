@@ -50,7 +50,8 @@ def downgrade?(from: String, to: String) -> Bool
 end
 
 ## Whether a failure may pass: a network or protocol failure, or a 5xx. A refusal (a 404, a bad redirect, no Range, a
-## proxy that refuses) will not.
+## proxy that refuses) will not. A TLS failure is retried even when it is a permanent one (a bad certificate); the
+## attempts bound it.
 def transient?(message: String) -> Bool
   message.include?(": HTTP 5") or TRANSIENT.any? do |m| message.start_with?(m) end
 end
@@ -72,7 +73,7 @@ READ_TIMEOUT_MS = 60_000
 CHUNK_BYTES = 33_554_432
 WRITE_BYTES = 1_048_576
 
-# The messages of a failure that may pass; a proxy that refuses or a 407 is not one.
+# The messages of a failure that is retried. The TLS ones may be permanent (a certificate), which costs the attempts.
 TRANSIENT = [
   "network: connection failed",
   "network: operation timed out",
