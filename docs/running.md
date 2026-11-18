@@ -21,7 +21,7 @@ agentica install
   are copied from `llama.h`. A wrong field list is undefined behavior, so `make check-bindings` (after this script and
   `scripts/fetch-llama.sh`) compares them: the field names, order and C types of each bound struct, the parameters and
   result of each bound function, and the size of each struct with the `sizeof` of the C compiler. Run it when you change
-  the tag; CI runs it.
+  the tag (`scripts/llama-tag`, which both fetch scripts read; `fetch-llama.sh` also needs the new sha256); CI runs it.
 - `agentica install`: Bond 0.15.1 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
   `agentica.lock`).
 

@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: deps/llama.cpp
-          key: llama-${{ hashFiles('scripts/fetch-llama.sh') }}
+          key: llama-${{ hashFiles('scripts/fetch-llama.sh', 'scripts/llama-tag') }}
 
       - name: Fetch llama.cpp
         run: scripts/fetch-llama.sh
@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: deps/llama.cpp
-          key: llama-${{ hashFiles('scripts/fetch-llama.sh') }}
+          key: llama-${{ hashFiles('scripts/fetch-llama.sh', 'scripts/llama-tag') }}
 
       - name: Cache the model
         uses: actions/cache@v4
