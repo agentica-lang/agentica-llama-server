@@ -60,6 +60,22 @@ def main() -> Void
   end
 end
 
+## Runs the clients to the end of the requests; a failed request is counted, the run goes on.
+def run(settings: Settings) -> Result[RunResult]
+  indexes: Channel[Int] = Channel.new(settings.total + 1)
+  for i in 0...settings.total
+    try indexes.send(i, 1000)
+  end
+
+  indexes.close()
+  job = Job(settings: settings, indexes: indexes)
+  begin = Time.monotonic_ns()
+  tasks = (0...settings.concurrency).map do |_| Task.spawn(&client, job) end
+  outcomes = tasks.map do |t| Task.await(t) end
+  wall = (Time.monotonic_ns() - begin).to_f() / NANOSECONDS
+  ok(summary(settings, outcomes, wall))
+end
+
 private
 
 SYSTEM = "You are a helpful assistant."
@@ -186,22 +202,6 @@ def extra_fields(text: String) -> Result[Map[String, JSON.Value]]
   end
 end
 
-## Runs the clients to the end of the requests; a failed request is counted, the run goes on.
-def run(settings: Settings) -> Result[RunResult]
-  indexes: Channel[Int] = Channel.new(settings.total + 1)
-  for i in 0...settings.total
-    try indexes.send(i, 1000)
-  end
-
-  indexes.close()
-  job = Job(settings: settings, indexes: indexes)
-  begin = Time.monotonic_ns()
-  tasks = (0...settings.concurrency).map do |_| Task.spawn(&client, job) end
-  outcomes = tasks.map do |t| Task.await(t) end
-  wall = (Time.monotonic_ns() - begin).to_f() / NANOSECONDS
-  ok(summary(settings, outcomes, wall))
-end
-
 def client(job: Job) -> Outcome
   conn = HTTP.start(job.settings.url, options())
   samples: List[Sample] = []
@@ -221,6 +221,9 @@ def client(job: Job) -> Outcome
       samples = samples.push(done.unwrap!)
     else
       failures = failures.push(done.message)
+    end
+
+    if !done.ok? or job.settings.stream
       HTTP.finish(conn.unwrap!)
       conn = HTTP.start(job.settings.url, options())
     end
