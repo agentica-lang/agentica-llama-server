@@ -7,11 +7,11 @@
 ##   agentica scripts/fetch.agc all       the three, with the CPU release and the default model
 ##
 ## The release is the one of scripts/llama-release: the build tag and the sha256 of its Linux x86_64 archive, the
-## sha256 of the archive of each other variant, then the sha256 of each header. The default model is the one of scripts/model. A download follows redirects (never from
-## https to http), and nothing takes its final name before its sha256 is checked. Each step skips what it already has.
-## HF_ENDPOINT (as for the Hugging Face tools) replaces https://huggingface.co, and LLAMA_RELEASES the folder of the
-## release downloads on GitHub (both are for tests). It does not import the bindings, so it runs before the libraries
-## that the manifest names exist.
+## sha256 of the archive of each other variant, then the sha256 of each header. The default model is the one of
+## scripts/model. A download follows redirects (never from https to http), and nothing takes its final name before
+## its sha256 is checked. Each step skips what it already has. HF_ENDPOINT (as for the Hugging Face tools) replaces
+## https://huggingface.co, and LLAMA_RELEASES the folder of the release downloads on GitHub (both are for tests). It
+## does not import the bindings, so it runs before the libraries that the manifest names exist.
 
 import Archive from "std/archive"
 import HTTP from "std/http"
