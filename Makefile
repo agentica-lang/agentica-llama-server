@@ -2,8 +2,8 @@
 AGENTICA ?= agentica
 
 # The tests of tests/bindings_test.agc and tests/fetch_test.agc; a run that tests nothing fails.
-BINDINGS_TESTS = 15
-FETCH_TESTS = 2
+BINDINGS_TESTS = 19
+FETCH_TESTS = 5
 
 .PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test
 

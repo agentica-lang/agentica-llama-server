@@ -59,12 +59,15 @@ def fails_with(name: String, old: String, new: String, message: String) -> Resul
   Test.assert(ran.stderr.include?(message), "stderr lacks `#{message}`:\n#{ran.stderr}")
 end
 
+def pinned_tag() -> Result[String] = ok((try File.read_text("scripts/llama-release")).split(" ")[0])
+
 ## Runs the check on `source` against a lone llama.h with `header_text`.
 def check_header(name: String, source: String, header_text: String) -> Result[Ran]
   dir = try scratch(name)
   headers = try Path.join([dir, "headers"])
   try Dir.mkdir(headers)
   try File.write_text(try Path.join([headers, "llama.h"]), header_text)
+  try File.write_text(try Path.join([headers, "TAG"]), try pinned_tag())
   ran = check(name, source, headers, ["--skip-sizes"], {})
   _ = Path.remove(dir)
   ran
@@ -219,4 +222,36 @@ def test_unsigned_is_32_bits_and_unsigned_long_is_refused() -> Result[Void]
   ran = try check_header("unsigned", source, "void h(unsigned int a, unsigned b);\nvoid k(unsigned long a);\n")
   try Test.assert(!ran.stderr.include?("h parameter"), ran.stderr)
   Test.assert(ran.stderr.include?("k parameter 1: unsupported C type `unsigned long`"), ran.stderr)
+end
+
+def test_a_size_t_bound_as_a_32_bit_integer_fails() -> Result[Void]
+  fails_with(
+    "size-t",
+    "    moe_cache_size: C.Int64\n",
+    "    moe_cache_size: C.Int32\n",
+    "moe_cache_size: the header has `size_t`, llama.agc `C.Int32`",
+  )
+end
+
+def test_the_first_declaration_of_a_function_wins() -> Result[Void]
+  source = "extern \"x\"\n  def g(x: C.Int32) -> C.Int32\nend\n"
+  ran = try check_header("duplicate", source, "int g(int x);\nint g(int x, int y);\n")
+  Test.assert(!ran.stderr.include?("g: the header takes"), ran.stderr)
+end
+
+def test_headers_of_another_release_fail() -> Result[Void]
+  dir = try scratch("stale")
+  headers = try Path.join([dir, "headers"])
+  try Dir.mkdir(headers)
+  try File.write_text(try Path.join([headers, "TAG"]), "b0")
+  ran = try check("stale", try File.read_text(SOURCE), headers, ["--skip-sizes"], {})
+  _ = Path.remove(dir)
+  try Test.eq(ran.code, 2)
+  Test.assert(ran.stderr.include?("is not from scripts/llama-release"), ran.stderr)
+end
+
+def test_a_field_line_without_a_type_is_an_error_not_a_crash() -> Result[Void]
+  ran = try check_text("no-type", try mutated("    n_ubatch: C.UInt32\n", "    n_ubatch\n"))
+  try Test.eq(ran.code, 2)
+  Test.assert(ran.stderr.include?("`n_ubatch` in struct ContextParams is not `name: Type`"), ran.stderr)
 end
