@@ -65,6 +65,16 @@ READ_TIMEOUT_MS = 60_000
 CHUNK_BYTES = 33_554_432
 WRITE_BYTES = 1_048_576
 
+# The messages of a failure that may pass; a proxy that refuses or a 407 is not one.
+TRANSIENT = [
+  "network: connection failed",
+  "network: operation timed out",
+  "http: connection failed",
+  "http: connection closed before the response was complete",
+  "http: truncated HTTP body",
+  "http: the connection is closed",
+]
+
 # The files of the release that the server and `llama-server` (the benchmark) use. The archive tells nothing about
 # what it holds, so a release with other files needs this list changed: the extraction fails on a missing one. The
 # versioned libraries are renamed to their soname (`libllama.so.1.0.0` is `libllama.so.1`), which the loader looks for.
@@ -315,7 +325,7 @@ end
 
 ## A network or protocol failure, or a 5xx, may pass; a refusal (a 404, a bad redirect, no Range) will not.
 def transient?(message: String) -> Bool
-  message.start_with?("network:") or message.start_with?("http: ") or message.include?(": HTTP 5")
+  message.include?(": HTTP 5") or TRANSIENT.any? do |m| message.start_with?(m) end
 end
 
 def get(url: String, path: String) -> Result[Void]

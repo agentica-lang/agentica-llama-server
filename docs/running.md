@@ -61,21 +61,23 @@ Agentica.
 ## Test
 
 ```sh
-AGENTICA=/path/to/agentica python3 -m unittest tests.test_api
-AGENTICA=/path/to/agentica python3 -m unittest tests.test_cli
-agentica test tests/bindings_test.agc
-agentica test tests/fetch_test.agc
+make test    # or: make test-bindings test-fetch test-cli test-api
+agentica test tests/api_test.agc
 ```
 
 `make check`, `make fmt-check` and `make test` run the type check, the format check and the four test files (`make
-install` fetches the packages; `AGENTICA=` picks the binary). CI runs them on Linux with the pinned Agentica release, in
-[.github/workflows/ci.yml](../.github/workflows/ci.yml).
+install` fetches the packages; `AGENTICA=` picks the binary). Each `make test-*` fails unless its file passes the count
+of tests in the `Makefile`, so a run that tests nothing fails. CI runs them on Linux with the pinned Agentica release,
+in [.github/workflows/ci.yml](../.github/workflows/ci.yml).
 
-`tests.test_api` starts the server with 4 slots and checks the routes, the streamed chunks (they add up to the
-non-streaming greedy answer, UTF-8 stays whole, the stream ends with `[DONE]`) and that clients that leave mid-stream
-free their slots.
+`tests/api_test.agc` starts the server (`Process`, a free port, the log in `tests/server.log`) with 4 slots and talks
+HTTP to it: the routes, the streamed chunks (they add up to the non-streaming greedy answer, UTF-8 stays whole, the
+stream ends with `[DONE]`), the 400 answers, and that clients that leave mid-stream free their slots. The server is
+closed when the run ends, failed or not.
 
-`tests.test_cli` checks the flags (`--help`, bad values, a valid set) and needs the llama.cpp libraries, not the model.
+`tests/cli_test.agc` checks the flags (`--help`, bad values, a valid set) and needs the llama.cpp libraries, not the
+model.
+
 
 `tests/bindings_test.agc` runs `scripts/check_bindings.agc` on the committed `llama.agc` (it must pass), then on copies
 with one mistake each: a removed or swapped field, a wrong field or parameter type, a missing parameter, an unknown

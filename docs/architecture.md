@@ -61,9 +61,10 @@ server.agc                     the program (wiring)
 src/llama_server/              the domain: engine.agc, llama.agc (FFI), numbers.agc, cli.agc (the flags, `std/option_parser`)
 src/llama_server_web/          HTTP: api.agc (the Bond routes)
 smoke.agc                      one sequence, to check the bindings
-scripts/                       fetch scripts (URL, tag and sha256 recorded in each)
-bench/client.py, run_all.py    the load client and the comparison runner
+scripts/                       fetch.agc (the release, its sha256s and the model are recorded in llama-release and model), check_bindings.agc
+bench/client.agc, run_all.agc  the load client and the comparison runner
 bench/results/                 the JSON of every run behind the tables
-tests/test_api.py              end-to-end test of the routes, streaming and a client that leaves
-tests/test_cli.py              the flags: `--help`, a bad value, an unknown flag, a valid set (no model needed)
+tests/api_test.agc             end-to-end test of the routes, streaming and a client that leaves
+tests/cli_test.agc             the flags: `--help`, a bad value, an unknown flag, a valid set (no model needed)
+tests/bindings_test.agc, fetch_test.agc   the bindings check and the fetch program, tested from outside
 ```

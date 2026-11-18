@@ -1,7 +1,6 @@
 ## scripts/fetch.agc against a local server that redirects and serves byte ranges (the way Hugging Face and its CDN
-## do): the download follows the redirect (absolute, relative or a loop), takes the file in pieces and checks its sha256;
-## a failed fetch leaves what was there. `agentica test` runs
-## it from the repo root; it needs no network and fetches nothing else.
+## do): the download follows the redirect (absolute, relative or a loop), takes the file in pieces and checks its
+## sha256; a failed fetch leaves what was there. `agentica test` runs it from the repo root; it needs no network.
 
 import Fetch from "../scripts/fetch"
 import HTTP from "std/http"
