@@ -22,23 +22,24 @@ def run_in(command: String, args: List[String], env: Map[String, String]) -> Res
   ok(Ran(code: code, stdout: out.stdout, stderr: out.stderr))
 end
 
-## A folder of its own for one test, under TMPDIR.
-def scratch(name: String) -> Result[String]
+## Runs `body` with a folder of its own under TMPDIR, which is removed after it, whatever the result.
+def in_scratch(name: String, body: Fn[String, Result[Ran]]) -> Result[Ran]
   base = System.env("TMPDIR").unwrap_or("/tmp")
   dir = try Path.join([base, "bindings-test-#{System.pid()}-#{name}"])
   try Path.remove(dir)
   try Dir.mkdir(dir)
-  ok(dir)
+  result = body.call(dir)
+  _ = Path.remove(dir)
+  result
 end
 
 ## Runs the check on `text` in the place of llama.agc, with the given headers and flags.
 def check(name: String, text: String, headers: String, flags: List[String], env: Map[String, String]) -> Result[Ran]
-  dir = try scratch(name + "-source")
-  source = try Path.join([dir, "llama.agc"])
-  try File.write_text(source, text)
-  ran = run_in(agentica(), [SCRIPT, "--source", source, "--headers", headers] + flags, env)
-  _ = Path.remove(dir)
-  ran
+  in_scratch(name + "-source") do |dir|
+    source = try Path.join([dir, "llama.agc"])
+    try File.write_text(source, text)
+    run_in(agentica(), [SCRIPT, "--source", source, "--headers", headers] + flags, env)
+  end
 end
 
 def check_text(name: String, text: String) -> Result[Ran] = check(name, text, HEADERS, ["--skip-sizes"], {})
@@ -63,14 +64,13 @@ def pinned_tag() -> Result[String] = ok((try File.read_text("scripts/llama-relea
 
 ## Runs the check on `source` against a lone llama.h with `header_text`.
 def check_header(name: String, source: String, header_text: String) -> Result[Ran]
-  dir = try scratch(name)
-  headers = try Path.join([dir, "headers"])
-  try Dir.mkdir(headers)
-  try File.write_text(try Path.join([headers, "llama.h"]), header_text)
-  try File.write_text(try Path.join([headers, "TAG"]), try pinned_tag())
-  ran = check(name, source, headers, ["--skip-sizes"], {})
-  _ = Path.remove(dir)
-  ran
+  in_scratch(name) do |dir|
+    headers = try Path.join([dir, "headers"])
+    try Dir.mkdir(headers)
+    try File.write_text(try Path.join([headers, "llama.h"]), header_text)
+    try File.write_text(try Path.join([headers, "TAG"]), try pinned_tag())
+    check(name, source, headers, ["--skip-sizes"], {})
+  end
 end
 
 def test_the_committed_bindings_match_the_headers_with_their_sizes() -> Result[Void]
@@ -167,23 +167,26 @@ def test_a_wrong_helper_constant_fails() -> Result[Void]
 end
 
 def test_a_size_that_differs_from_the_c_one_fails() -> Result[Void]
-  dir = try scratch("size")
-  headers = try Path.join([dir, "headers"])
-  try Dir.mkdir(headers)
-  for name in try Dir.list(HEADERS)
-    try File.write_text(try Path.join([headers, name]), try File.read_text(try Path.join([HEADERS, name])))
+  source = try File.read_text(SOURCE)
+  old = "bool no_perf; // whether to measure performance timings"
+  ran = try in_scratch("size") do |dir|
+    headers = try Path.join([dir, "headers"])
+    try Dir.mkdir(headers)
+    for name in try Dir.list(HEADERS)
+      try File.write_text(try Path.join([headers, name]), try File.read_text(try Path.join([HEADERS, name])))
+    end
+
+    path = try Path.join([headers, "llama.h"])
+    changed = try replace_first(
+      try File.read_text(path),
+      old,
+      "int32_t no_perf; // whether to measure performance timings",
+    )
+
+    try File.write_text(path, changed)
+    check("size", source, headers, [], {})
   end
 
-  path = try Path.join([headers, "llama.h"])
-  old = "bool no_perf; // whether to measure performance timings"
-  try File.write_text(
-    path,
-    try replace_first(try File.read_text(path), old, "int32_t no_perf; // whether to measure performance timings"),
-  )
-
-  source = try File.read_text(SOURCE)
-  ran = try check("size", source, headers, [], {})
-  _ = Path.remove(dir)
   try Test.eq(ran.code, 1)
   message = "sizeof SamplerChainParams: the C compiler says 4, Native.size_of says 1"
   Test.assert(ran.stderr.include?(message), "stderr lacks `#{message}`:\n#{ran.stderr}")
@@ -240,12 +243,14 @@ def test_the_first_declaration_of_a_function_wins() -> Result[Void]
 end
 
 def test_headers_of_another_release_fail() -> Result[Void]
-  dir = try scratch("stale")
-  headers = try Path.join([dir, "headers"])
-  try Dir.mkdir(headers)
-  try File.write_text(try Path.join([headers, "TAG"]), "b0")
-  ran = try check("stale", try File.read_text(SOURCE), headers, ["--skip-sizes"], {})
-  _ = Path.remove(dir)
+  source = try File.read_text(SOURCE)
+  ran = try in_scratch("stale") do |dir|
+    headers = try Path.join([dir, "headers"])
+    try Dir.mkdir(headers)
+    try File.write_text(try Path.join([headers, "TAG"]), "b0")
+    check("stale", source, headers, ["--skip-sizes"], {})
+  end
+
   try Test.eq(ran.code, 2)
   Test.assert(ran.stderr.include?("is not from scripts/llama-release"), ran.stderr)
 end

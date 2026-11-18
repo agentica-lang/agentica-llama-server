@@ -3,7 +3,7 @@ AGENTICA ?= agentica
 
 # The number of tests each file of tests/ has: a run that tests fewer, or nothing, fails.
 BINDINGS_TESTS = 19
-FETCH_TESTS = 5
+FETCH_TESTS = 10
 CLI_TESTS = 5
 API_TESTS = 8
 

@@ -8,8 +8,9 @@
 ## The release is the one of scripts/llama-release: the build tag and the sha256 of its Linux x86_64 archive, then
 ## the sha256 of each header. The default model is the one of scripts/model. A download follows redirects (never from
 ## https to http), and nothing takes its final name before its sha256 is checked. Each step skips what it already has.
-## HF_ENDPOINT (as for the Hugging Face tools) replaces https://huggingface.co. It does not import the bindings, so it
-## runs before the libraries that the manifest names exist.
+## HF_ENDPOINT (as for the Hugging Face tools) replaces https://huggingface.co, and LLAMA_RELEASES the folder of the
+## release downloads on GitHub (both are for tests). It does not import the bindings, so it runs before the libraries
+## that the manifest names exist.
 
 import Archive from "std/archive"
 import HTTP from "std/http"
@@ -24,9 +25,33 @@ def main() -> Void
   end
 end
 
+## The URL that a Location means from `url`: absolute, protocol-relative (`//host/p`), a path (`/p`) or relative to the
+## folder of the URL's path. Dot segments are not resolved.
+def absolute(url: String, location: String) -> String
+  return location if Regex.match?(location, /^https?:\/\//i)
+
+  scheme = url.split(":")[0]
+  return "#{scheme}:#{location}" if location.start_with?("//")
+
+  origin = Regex.match(url, /^https?:\/\/[^\/?#]+/).unwrap!.text
+  return "#{origin}#{location}" if location.start_with?("/")
+
+  path = Regex.replace(url.slice(origin.length, url.length - origin.length), /[?#].*$/, "").unwrap!
+  folder = Regex.replace(path, /[^\/]*$/, "").unwrap!
+  return "#{origin}/#{location}" if folder.empty?
+
+  "#{origin}#{folder}#{location}"
+end
+
+## Whether a redirect from `from` to `to` leaves https for another scheme.
+def downgrade?(from: String, to: String) -> Bool
+  from.downcase().start_with?("https:") and !to.downcase().start_with?("https:")
+end
+
 private
 
 RELEASE_FILE = "scripts/llama-release"
+RELEASES = "https://github.com/ggml-org/llama.cpp/releases/download"
 MODEL_FILE = "scripts/model"
 LIBRARIES = "native/linux"
 HEADERS = "deps/headers"
@@ -100,6 +125,8 @@ end
 ## `scripts/llama-release`: `TAG ARCHIVE_SHA256`, then a `PATH SHA256` line for each header.
 def read_release() -> Result[Release]
   lines = (try File.read_text(RELEASE_FILE)).split("\n").select do |l| l.strip() != "" end
+  return error("#{RELEASE_FILE} is empty") if lines.empty?
+
   first = lines.first.split(" ")
   return error("#{RELEASE_FILE}: the first line is `TAG SHA256`") if first.size != 2
 
@@ -128,7 +155,8 @@ def fetch_llama() -> Result[Void]
 
   try Dir.mkdir(DOWNLOADS)
   archive = "#{DOWNLOADS}/#{release.archive.name}"
-  url = "https://github.com/ggml-org/llama.cpp/releases/download/#{release.tag}/#{release.archive.name}"
+  releases = Regex.replace(System.env("LLAMA_RELEASES").unwrap_or(RELEASES), /\/+$/, "").unwrap!
+  url = "#{releases}/#{release.tag}/#{release.archive.name}"
   installed = case download_checked(url, archive, release.archive.sha256)
     ok(_) -> install_release(archive, release.tag)
     error(e) -> error(e.message)
@@ -138,21 +166,30 @@ def fetch_llama() -> Result[Void]
   installed
 end
 
-## The archive is extracted into a scratch folder first, so a failure leaves the libraries that are there.
+## The archive is extracted into a scratch folder and the libraries are put together in a new one, which takes the place
+## of the old libraries last, so a failure leaves the libraries that are there.
 def install_release(archive: String, tag: String) -> Result[Void]
   scratch = "#{DOWNLOADS}/llama-#{tag}"
+  fresh = "#{LIBRARIES}.new"
   _ = Path.remove(scratch)
-  members = RELEASE_MEMBERS.map do |m| "llama-#{tag}/#{m}" end
-  try cleaning(Archive.extract_tar(archive, members, scratch), scratch)
+  _ = Path.remove(fresh)
+  built = build_libraries(archive, tag, scratch, fresh)
+  _ = Path.remove(scratch)
+  try cleaning(built, fresh)
   _ = Path.remove(LIBRARIES)
-  try Dir.mkdir(LIBRARIES)
+  Path.rename(fresh, LIBRARIES)
+end
+
+def build_libraries(archive: String, tag: String, scratch: String, fresh: String) -> Result[Void]
+  members = RELEASE_MEMBERS.map do |m| "llama-#{tag}/#{m}" end
+  try Archive.extract_tar(archive, members, scratch)
+  try Dir.mkdir(fresh)
   for name in RELEASE_MEMBERS
-    try Path.rename("#{scratch}/llama-#{tag}/#{name}", "#{LIBRARIES}/#{soname(name)}")
+    try Path.rename("#{scratch}/llama-#{tag}/#{name}", "#{fresh}/#{soname(name)}")
   end
 
-  _ = Path.remove(scratch)
-  try executable("#{LIBRARIES}/llama-server")
-  File.write_text("#{LIBRARIES}/TAG", tag)
+  try executable("#{fresh}/llama-server")
+  File.write_text("#{fresh}/TAG", tag)
 end
 
 ## The extraction writes private files without the execute bit, and Agentica has no chmod.
@@ -216,7 +253,9 @@ def fetch_model(args: List[String]) -> Result[Void]
   puts("fetching #{url}")
   partial = "#{out}.part"
   try download_checked(url, partial, sha256)
-  Path.rename(partial, out)
+  # The old file, if any, failed the check above, and `rename` never replaces a file.
+  _ = Path.remove(out)
+  cleaning(Path.rename(partial, out), partial)
 end
 
 def already(text: String) -> Result[Void]
@@ -268,10 +307,15 @@ end
 def attempt(url: String, path: String, left: Int) -> Result[Void]
   _ = Path.remove(path)
   done = get(url, path)
-  return done if done.ok? or left <= 1
+  return done if done.ok? or left <= 1 or !transient?(done.message)
 
   IO.warn("fetch: #{done.message}, trying again")
   attempt(url, path, left - 1)
+end
+
+## A network or protocol failure, or a 5xx, may pass; a refusal (a 404, a bad redirect, no Range) will not.
+def transient?(message: String) -> Bool
+  message.start_with?("network:") or message.start_with?("http: ") or message.include?(": HTTP 5")
 end
 
 def get(url: String, path: String) -> Result[Void]
@@ -305,9 +349,7 @@ def resolve(client: HTTP.Client, url: String, hops: Int) -> Result[String]
   return error("#{url}: a redirect with no Location") if places.empty?
 
   target = absolute(url, places[0])
-  if url.downcase().start_with?("https:") and !target.downcase().start_with?("https:")
-    return error("#{url}: a redirect to #{target}, not https")
-  end
+  return error("#{url}: a redirect to #{target}, not https") if downgrade?(url, target)
 
   resolve(client, target, hops - 1)
 end
@@ -361,22 +403,4 @@ def write_all(file: File.Handle, body: Bytes) -> Result[Void]
   end
 
   ok()
-end
-
-## The URL that a Location means from `url`: absolute, protocol-relative (`//host/p`), a path (`/p`) or relative to the
-## folder of the URL's path. Dot segments are not resolved.
-def absolute(url: String, location: String) -> String
-  return location if Regex.match?(location, /^https?:\/\//i)
-
-  scheme = url.split(":")[0]
-  return "#{scheme}:#{location}" if location.start_with?("//")
-
-  origin = Regex.match(url, /^https?:\/\/[^\/?#]+/).unwrap!.text
-  return "#{origin}#{location}" if location.start_with?("/")
-
-  path = Regex.replace(url.slice(origin.length, url.length - origin.length), /[?#].*$/, "").unwrap!
-  folder = Regex.replace(path, /[^\/]*$/, "").unwrap!
-  return "#{origin}/#{location}" if folder.empty?
-
-  "#{origin}#{folder}#{location}"
 end
