@@ -16,9 +16,12 @@ agentica install
   any other public GGUF model on Hugging Face, pass the repo, the file and its sha256, for example
   `scripts/fetch-model.sh Qwen/Qwen2.5-1.5B-Instruct-GGUF qwen2.5-1.5b-instruct-q4_k_m.gguf <sha256>`, then run the
   server with `--model deps/qwen2.5-1.5b-instruct-q4_k_m.gguf`.
-- [scripts/fetch-headers.sh](../scripts/fetch-headers.sh): `llama.h` of the same tag, only to compare the struct
-  layouts in `src/llama_server/llama.agc`. The release archive ships no headers, so the struct layouts were copied from `llama.h` at
-  tag `b12359` (v1.0.0); a wrong field list is undefined behavior, so re-check them if you change the tag.
+- [scripts/fetch-headers.sh](../scripts/fetch-headers.sh): `llama.h` of the same tag and the headers it includes, into
+  `deps/headers`. The release archive ships no headers, and the structs and signatures of `src/llama_server/llama.agc`
+  are copied from `llama.h`. A wrong field list is undefined behavior, so `make check-bindings` (after this script and
+  `scripts/fetch-llama.sh`) compares them: the field names, order and C types of each bound struct, the parameters and
+  result of each bound function, and the size of each struct with the `sizeof` of the C compiler. Run it when you change
+  the tag; CI runs it.
 - `agentica install`: Bond 0.15.1 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
   `agentica.lock`).
 

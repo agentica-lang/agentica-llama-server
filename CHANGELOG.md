@@ -9,6 +9,10 @@ All notable changes to this project are listed here. The format follows [Keep a 
 - **Breaking:** needs Agentica 0.34.1 or later and Bond 0.15.1: the sources use `private` instead of `export`, the nested builtin names (`JSON.Field`, `HTTP.ServerOptions`) and the `Error` record of a failed Result, and are formatted with `agentica fmt` (implicit returns, guards, one-line defs). `agentica.toml` names the oldest Agentica it needs. CI tests with Agentica 0.34.1. The request and response codecs are `ChatRequest.codec` and `ChatResponse.codec`.
 - llama.cpp v1.0.0, build b12359 (was b12012), the prebuilt Linux x86_64 CPU release, sha256-checked: the context parameters follow its new layout, and the manifest names `libllama.so.1` and `libggml.so.1`. v1.0.0 removes the deprecated functions of `llama.h` and `defrag_thold`; the server called none of them. `scripts/fetch-headers.sh` gets the headers of the same build.
 
+### Added
+
+- `make check-bindings` compares the structs and functions of `llama.agc` with the llama.cpp headers (names, order, C types, parameters, and the `sizeof` of each struct against the C compiler's), and fails with a diff. CI runs it. `scripts/fetch-headers.sh` now gets every header `llama.h` includes.
+
 ## [0.1.0] - 2026-11-05
 
 First release: a prototype LLM inference server, the Bond web framework in front of llama.cpp, called through the Agentica FFI.

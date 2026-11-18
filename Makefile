@@ -1,7 +1,7 @@
 # Needs Agentica 0.34.1 or later on PATH (or AGENTICA=/path/to/agentica).
 AGENTICA ?= agentica
 
-.PHONY: install check fmt-check test
+.PHONY: install check fmt-check check-bindings test
 
 install:
 	$(AGENTICA) install
@@ -11,8 +11,13 @@ check:
 	$(AGENTICA) check
 
 fmt-check:
-	$(AGENTICA) fmt --check server.agc smoke.agc src
+	$(AGENTICA) fmt --check server.agc smoke.agc src scripts
 
-# Needs scripts/fetch-llama.sh and scripts/fetch-model.sh.
+# The structs and functions of llama.agc against the llama.cpp headers, and their sizes against the C compiler's.
+# Needs scripts/fetch-headers.sh and scripts/fetch-llama.sh.
+check-bindings:
+	AGENTICA=$(AGENTICA) python3 scripts/check-bindings.py
+
+# Needs scripts/fetch-llama.sh, scripts/fetch-headers.sh and scripts/fetch-model.sh.
 test:
-	AGENTICA=$(AGENTICA) python3 -m unittest tests.test_cli tests.test_api
+	AGENTICA=$(AGENTICA) python3 -m unittest tests.test_cli tests.test_api tests.test_bindings
