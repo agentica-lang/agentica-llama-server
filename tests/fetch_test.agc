@@ -162,6 +162,30 @@ def test_a_missing_file_is_not_retried() -> Result[Void]
   end
 end
 
+def test_only_a_transient_failure_is_retried() -> Result[Void]
+  for message in [
+    "network: connection failed\n  host: h",
+    "network: end of input",
+    "network: TLS handshake failed",
+    "http: truncated HTTP body",
+    "http://h/f: HTTP 503",
+  ]
+    try Test.assert(Fetch.transient?(message), message)
+  end
+
+  for message in [
+    "http://h/f: HTTP 404",
+    "http://h/f: HTTP 407",
+    "http: proxy refused the CONNECT",
+    "network: proxy connect failed",
+    "http://h/f: a redirect with no Location",
+  ]
+    try Test.assert(!Fetch.transient?(message), message)
+  end
+
+  ok()
+end
+
 def test_a_redirect_never_leaves_https() -> Result[Void]
   try Test.assert(Fetch.downgrade?("https://a.test/x", "http://a.test/x"), "https to http")
   try Test.assert(!Fetch.downgrade?("https://a.test/x", "https://b.test/x"), "https to https")

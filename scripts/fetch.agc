@@ -49,6 +49,12 @@ def downgrade?(from: String, to: String) -> Bool
   from.downcase().start_with?("https:") and !to.downcase().start_with?("https:")
 end
 
+## Whether a failure may pass: a network or protocol failure, or a 5xx. A refusal (a 404, a bad redirect, no Range, a
+## proxy that refuses) will not.
+def transient?(message: String) -> Bool
+  message.include?(": HTTP 5") or TRANSIENT.any? do |m| message.start_with?(m) end
+end
+
 private
 
 RELEASE_FILE = "scripts/llama-release"
@@ -70,6 +76,10 @@ WRITE_BYTES = 1_048_576
 TRANSIENT = [
   "network: connection failed",
   "network: operation timed out",
+  "network: host not found",
+  "network: TLS connect failed",
+  "network: TLS handshake failed",
+  "network: end of input",
   "http: connection failed",
   "http: connection closed before the response was complete",
   "http: truncated HTTP body",
@@ -218,8 +228,8 @@ def variant_of(args: List[String], release: Release) -> Result[String]
   ok(variant)
 end
 
-## The archive is extracted into a scratch folder and the libraries are put together in a new one, which takes the place
-## of the old libraries last, so a failure leaves the libraries that are there.
+## The archive is extracted into a scratch folder and the libraries are put together in a new one, which takes the
+## place of the old libraries last, so a failure leaves the libraries that are there.
 def install_release(archive: String, tag: String, members: List[String], stamp: String) -> Result[Void]
   scratch = "#{DOWNLOADS}/llama-#{tag}"
   fresh = "#{LIBRARIES}.new"
@@ -369,11 +379,6 @@ def attempt(url: String, path: String, left: Int) -> Result[Void]
 
   IO.warn("fetch: #{done.message}, trying again")
   attempt(url, path, left - 1)
-end
-
-## A network or protocol failure, or a 5xx, may pass; a refusal (a 404, a bad redirect, no Range) will not.
-def transient?(message: String) -> Bool
-  message.include?(": HTTP 5") or TRANSIENT.any? do |m| message.start_with?(m) end
 end
 
 def get(url: String, path: String) -> Result[Void]

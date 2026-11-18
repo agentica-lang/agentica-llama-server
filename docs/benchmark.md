@@ -188,8 +188,9 @@ No request failed in any run.
 
 **Not rerun**: this is the 0.19.0-beta.1 result (Bond 0.2.0, capped CPU), kept in
 [bench/results/0.19.0-beta.1/health.json](../bench/results/0.19.0-beta.1/health.json). Medians of 3 runs. Measured by
-hand, not by `run_all.agc` (a Python script then, `bench/client.agc` now, with the same options): both servers started with `taskset -c 0-3` (4 threads, `-c 8192`, 8 slots), then
-`bench/client.agc --url URL --concurrency N --requests 3000 --health` for each server and concurrency, three times in turn.
+hand, not by `run_all.agc` (a Python script then, `bench/client.agc` now, with the same options): both servers started
+with `taskset -c 0-3` (4 threads, `-c 8192`, 8 slots), then `bench/client.agc --url URL --concurrency N --requests 3000
+--health` for each server and concurrency, three times in turn.
 
 | server | concurrency | req/s | p50 ms | p95 ms |
 |---|---|---|---|---|

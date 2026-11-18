@@ -294,12 +294,12 @@ def body_for(settings: Settings, index: Int) -> Bytes
     "seed": JSON.from(1),
   }
 
-  if settings.stream
-    fields = fields.put("stream", JSON.from(true)).put("stream_options", JSON.from({"include_usage": true}))
-  end
-
   for key in settings.extra.keys
     fields = fields.put(key, settings.extra[key])
+  end
+
+  if settings.stream
+    fields = fields.put("stream", JSON.from(true)).put("stream_options", JSON.from({"include_usage": true}))
   end
 
   JSON.encode(JSON.object(fields)).bytes
