@@ -21,7 +21,12 @@ end
 
 # `OP.run!` prints the help and exits 0, or prints a mistake of the command line to stderr and exits 2.
 def main() -> Void
-  run(OP.run!(Cli.parse(System.args())))
+  (
+    System.args()
+    |> Cli.parse()
+    |> OP.run!()
+    |> run()
+  )
 end
 
 def run(options: Cli.Options) -> Void

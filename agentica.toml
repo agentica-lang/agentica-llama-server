@@ -1,5 +1,5 @@
 name = "agentica-llama-server"
-agentica = "0.31.2"
+agentica = "0.34.1"
 
 [style]
 blank_line_after_end = true
@@ -13,4 +13,4 @@ linux = { file = "native/linux/libllama.so.1" }
 linux = { file = "native/linux/libggml.so.1" }
 
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.12.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.15.1" }
