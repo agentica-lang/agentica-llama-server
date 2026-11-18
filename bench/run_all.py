@@ -20,7 +20,7 @@ import client  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL = os.path.join(ROOT, "deps", "qwen2.5-0.5b-instruct-q4_k_m.gguf")
-LLAMA_DIR = os.path.join(ROOT, "deps", "llama.cpp")
+LLAMA_DIR = os.path.join(ROOT, "native", "linux")
 SCOPE = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0", "--"]
 
 

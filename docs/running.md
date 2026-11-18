@@ -3,26 +3,30 @@
 ## Fetch the dependencies
 
 ```sh
-scripts/fetch-llama.sh
-scripts/fetch-model.sh
-scripts/fetch-headers.sh
+agentica scripts/fetch.agc all    # or: llama, headers, model [REPO FILE SHA256]
 agentica install
 ```
 
-- [scripts/fetch-llama.sh](../scripts/fetch-llama.sh): llama.cpp v1.0.0 (build b12359), Linux x86-64 CPU build, sha256-checked, into
-  `deps/llama.cpp`. It also links the libraries into `native/linux/` because Agentica only loads `[native]` files from
-  a `native/` folder (see [gaps.md](gaps.md)).
-- [scripts/fetch-model.sh](../scripts/fetch-model.sh): Qwen2.5-0.5B-Instruct Q4_K_M, sha256-checked, into `deps/`. For
-  any other public GGUF model on Hugging Face, pass the repo, the file and its sha256, for example
-  `scripts/fetch-model.sh Qwen/Qwen2.5-1.5B-Instruct-GGUF qwen2.5-1.5b-instruct-q4_k_m.gguf <sha256>`, then run the
-  server with `--model deps/qwen2.5-1.5b-instruct-q4_k_m.gguf`.
-- [scripts/fetch-headers.sh](../scripts/fetch-headers.sh): `llama.h` of the same tag and the headers it includes, into
-  `deps/headers`. The release archive ships no headers, and the structs and signatures of `src/llama_server/llama.agc`
-  are copied from `llama.h`. A wrong field list is undefined behavior, so `make check-bindings` (after this script and
-  `scripts/fetch-llama.sh`) compares them: the field names, order and C types of each bound struct, the parameters and
-  result of each bound function, and the size of each struct with the `sizeof` of the C compiler (`cc`, or
-  `agentica scripts/check_bindings.agc --skip-sizes` without one). The check is `scripts/check_bindings.agc`. Run it when you change
-  the tag (`scripts/llama-tag`, which both fetch scripts read; `fetch-llama.sh` also needs the new sha256); CI runs it.
+Run from the repo root. `scripts/fetch.agc` is a program in Agentica (`make fetch` runs it): the downloads follow
+redirects, are taken in 32 MiB pieces and are checked against their sha256 before they take their name, and each step
+skips what it has. It does not import the bindings, so it runs before the libraries that the manifest names exist.
+
+- `llama`: llama.cpp v1.0.0 (build b12359), Linux x86-64 CPU build, sha256-checked, into `native/linux/`, because
+  Agentica only loads `[native]` files from a `native/` folder (see [gaps.md](gaps.md)). The libraries are there by their
+  soname (`libllama.so.1`), and `libggml-cpu-*.so`, which ggml loads from the same folder, and `llama-server` for the
+  benchmark come with them. The release is `scripts/llama-release`: its tag and the sha256 of its archive. The files that
+  it keeps are listed in `scripts/fetch.agc` (`RELEASE_MEMBERS`); a release with other files needs that list changed.
+- `model`: Qwen2.5-0.5B-Instruct Q4_K_M, sha256-checked, into `deps/`. For any other public GGUF model on Hugging Face,
+  pass the repo, the file and its sha256, for example
+  `agentica scripts/fetch.agc model Qwen/Qwen2.5-1.5B-Instruct-GGUF qwen2.5-1.5b-instruct-q4_k_m.gguf <sha256>`, then run
+  the server with `--model deps/qwen2.5-1.5b-instruct-q4_k_m.gguf`. `HF_ENDPOINT` replaces `https://huggingface.co`.
+- `headers`: `llama.h` of the same tag and the headers it includes, into `deps/headers`. The release archive ships no
+  headers, and the structs and signatures of `src/llama_server/llama.agc` are copied from `llama.h`. A wrong field list
+  is undefined behavior, so `make check-bindings` (after `fetch.agc headers` and `llama`) compares them: the field names,
+  order and C types of each bound struct, the parameters and result of each bound function, and the size of each struct
+  with the `sizeof` of the C compiler (`cc`, or `agentica scripts/check_bindings.agc --skip-sizes` without one). The check
+  is `scripts/check_bindings.agc`. Run it when you change the release (the new sha256 goes in `scripts/llama-release`);
+  CI runs it.
 - `agentica install`: Bond 0.15.1 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
   `agentica.lock`).
 

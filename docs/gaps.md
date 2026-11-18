@@ -27,9 +27,14 @@ Closed since the first version:
   `abort_callback` cannot be set: `agentica smoke.agc` prints about 200 KB of llama.cpp log lines to stderr at start.
 - **A project `[native]` file must be under `native/`.** `[native.llama]` with `linux = { file = "deps/llama.cpp/libllama.so.1" }`
   fails: `PKG-MANIFEST-INVALID ... not a native file ... a native file is a path in the native/ folder of the package`.
-  A prebuilt library that lives elsewhere (a fetched release) needs symlinks into `native/linux/` (what
-  `scripts/fetch-llama.sh` does) or an absolute `system` path that cannot be committed. A project-relative path
-  anywhere in the tree would fix it.
+  A prebuilt library that lives elsewhere (a fetched release) must be put into `native/linux/` (what
+  `agentica scripts/fetch.agc llama` does: it extracts there) or be an absolute `system` path that cannot be committed.
+  A project-relative path anywhere in the tree would fix it.
+- **No chmod, and `Archive.extract_tar` drops the execute bit.** An extracted file is private (mode 0600), so
+  `llama-server` of the release, which the benchmark runs, needs `chmod u+x`: `scripts/fetch.agc` runs the `chmod` tool.
+- **`HTTP.download` writes 256 MiB at most** (`max_total_bytes` above that is `http: max_total_bytes must be at most
+  268435456`), and the other calls keep the body in memory (64 MiB at most), so a 491 MB model is fetched in 32 MiB
+  `Range` pieces by hand (`scripts/fetch.agc`).
 - **`Int` has no `min` or `max`.** `n_batch.min(512)` is `CHECK-UNKNOWN-METHOD: Int has no method "min"`.
   Agentica 0.23.0 added `n.clamp(lo, hi)` and `[a, b].min.unwrap!`, but a clamp needs a lower bound that the call
   sites do not have and the list form allocates on the engine's step path, so `src/llama_server/numbers.agc` keeps

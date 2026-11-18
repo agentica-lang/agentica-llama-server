@@ -1,6 +1,6 @@
 """scripts/check_bindings.agc: it accepts llama.agc, and fails with a message when a struct or a function is wrong.
 
-Needs scripts/fetch-headers.sh and scripts/fetch-llama.sh. Run from the repo root:
+Needs `agentica scripts/fetch.agc headers` and `llama`. Run from the repo root:
 `python3 -m unittest tests.test_bindings`.
 """
 import os

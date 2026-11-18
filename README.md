@@ -7,7 +7,7 @@ A prototype LLM inference server written in [Agentica](https://github.com/agenti
 ## Get started
 
 ```sh
-scripts/fetch-llama.sh && scripts/fetch-model.sh && agentica install
+agentica scripts/fetch.agc all && agentica install
 agentica server.agc --port 8080 --threads 4 --ctx 8192 --parallel 8
 
 curl localhost:8080/v1/chat/completions -H 'content-type: application/json' \

@@ -9,7 +9,7 @@
 ##
 ## agentica scripts/check_bindings.agc [--headers DIR] [--source FILE] [--skip-sizes]
 ##
-## Needs scripts/fetch-headers.sh and, for the sizes, a C compiler (cc). Exit 0 when the bindings match, 1 when not.
+## Needs `agentica scripts/fetch.agc headers` and, for the sizes, a C compiler (cc). Exit 0 when the bindings match, 1 when not.
 
 import Llama from "../src/llama_server/llama"
 import OP from "std/option_parser"
@@ -138,7 +138,12 @@ def parse(args: List[String]) -> Result[Options]
     "Checks the bindings of llama.agc against the llama.cpp headers",
     [],
     [
-      Opt(name: "headers", metavar: "DIR", default: "deps/headers", help: "the folder scripts/fetch-headers.sh fills"),
+      Opt(
+        name: "headers",
+        metavar: "DIR",
+        default: "deps/headers",
+        help: "the folder `scripts/fetch.agc headers` fills",
+      ),
       Opt(name: "source", metavar: "FILE", default: "src/llama_server/llama.agc", help: "the bindings"),
       Opt(name: "skip-sizes", kind: Kind.Flag, help: "skip the C compiler and the sizes"),
     ],
@@ -169,7 +174,7 @@ end
 
 def read_header(dir: String) -> Result[Header]
   names = try Dir.list(dir)
-  return error("no llama.h in #{dir}: run scripts/fetch-headers.sh") if !names.include?("llama.h")
+  return error("no llama.h in #{dir}: run agentica scripts/fetch.agc headers") if !names.include?("llama.h")
 
   texts: List[String] = []
   headers = names.select do |n| n.end_with?(".h") end
