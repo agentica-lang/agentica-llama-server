@@ -1,8 +1,5 @@
 deps/
 *.agcb
 native/linux/
-__pycache__/
 bench/results/*.log
-tests/server.log
-bindings-test.log
-fetch-test.log
+tests/*.log
