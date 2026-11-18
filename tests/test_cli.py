@@ -1,6 +1,6 @@
 """The command line of server.agc, end to end and without a model: the run ends at the command line or at the load.
 
-Needs scripts/fetch-llama.sh (the manifest names the native files) and the agentica binary in AGENTICA (default:
+Needs `agentica scripts/fetch.agc llama` (the manifest names the native files) and the agentica binary in AGENTICA (default:
 `agentica` on PATH). Run from the repo root: `python3 -m unittest tests.test_cli`.
 """
 import os

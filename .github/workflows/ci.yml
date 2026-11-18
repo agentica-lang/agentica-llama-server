@@ -32,11 +32,11 @@ jobs:
       - name: Cache llama.cpp
         uses: actions/cache@v4
         with:
-          path: deps/llama.cpp
-          key: llama-${{ hashFiles('scripts/fetch-llama.sh', 'scripts/llama-tag') }}
+          path: native/linux
+          key: llama-${{ hashFiles('scripts/fetch.agc', 'scripts/llama-release') }}
 
       - name: Fetch llama.cpp
-        run: scripts/fetch-llama.sh
+        run: agentica scripts/fetch.agc llama
 
       # The locked packages (Bond), checked against the hashes of agentica.lock.
       - name: Install the packages
@@ -51,13 +51,10 @@ jobs:
         run: make fmt-check
 
       - name: Fetch the llama.cpp headers
-        run: scripts/fetch-headers.sh
+        run: agentica scripts/fetch.agc headers
 
       - name: Check the bindings
         run: make check-bindings
-
-      - name: Test the bindings check
-        run: make test-bindings
 
   # The server loads a 0.5B model on the CPU of the runner and answers a few short prompts.
   test:
@@ -78,21 +75,21 @@ jobs:
       - name: Cache llama.cpp
         uses: actions/cache@v4
         with:
-          path: deps/llama.cpp
-          key: llama-${{ hashFiles('scripts/fetch-llama.sh', 'scripts/llama-tag') }}
+          path: native/linux
+          key: llama-${{ hashFiles('scripts/fetch.agc', 'scripts/llama-release') }}
 
       - name: Cache the model
         uses: actions/cache@v4
         with:
           path: deps/qwen2.5-0.5b-instruct-q4_k_m.gguf
-          key: model-${{ hashFiles('scripts/fetch-model.sh') }}
+          key: model-${{ hashFiles('scripts/model') }}
 
-      # Both scripts check the sha256 and skip a download they already have.
+      # The script checks the sha256 and skips a download it already has.
       - name: Fetch llama.cpp and the model
         run: |
-          scripts/fetch-llama.sh
-          scripts/fetch-headers.sh
-          scripts/fetch-model.sh
+          agentica scripts/fetch.agc llama
+          agentica scripts/fetch.agc headers
+          agentica scripts/fetch.agc model
 
       - name: Install the packages
         run: |

@@ -1,6 +1,6 @@
 """End-to-end check of the server: starts it on a free port and talks HTTP.
 
-Needs the fetched deps (scripts/fetch-llama.sh, scripts/fetch-model.sh) and the agentica binary in AGENTICA
+Needs the fetched deps (`agentica scripts/fetch.agc all`) and the agentica binary in AGENTICA
 (default: `agentica` on PATH). Run from the repo root: `python3 -m unittest tests.test_api`.
 """
 import http.client

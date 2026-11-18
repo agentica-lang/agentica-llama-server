@@ -4,7 +4,7 @@ agentica = "0.34.1"
 [style]
 blank_line_after_end = true
 
-# Prebuilt llama.cpp release (scripts/fetch-llama.sh). libllama.so finds
+# Prebuilt llama.cpp release (`agentica scripts/fetch.agc llama`). libllama.so finds
 # libggml.so next to itself through RUNPATH=$ORIGIN.
 [native.llama]
 linux = { file = "native/linux/libllama.so.1" }

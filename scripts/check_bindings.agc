@@ -7,14 +7,36 @@
 ## it, must be Native.size_of of Agentica, and the sizes that the helpers of llama.agc assume (the constants at its
 ## end, the widths of the batch arrays) must be the C ones.
 ##
-## agentica scripts/check_bindings.agc [--headers DIR] [--source FILE] [--skip-sizes]
+## agentica scripts/check_bindings.agc [--headers DIR] [--source FILE] [--release FILE] [--skip-sizes]
 ##
-## Needs scripts/fetch-headers.sh and, for the sizes, a C compiler (cc). Exit 0 when the bindings match, 1 when not.
+## Needs `agentica scripts/fetch.agc headers` and, for the sizes, a C compiler (cc). Exit 0 when the bindings match, 1
+## when not, 2 when something cannot be read or run (headers of another release, no cc).
 
 import Llama from "../src/llama_server/llama"
 import OP from "std/option_parser"
 import Regex from "std/regex"
 import {Kind, Opt} from "std/option_parser"
+
+def main() -> Void
+  parsed = parse(System.args())
+  options = OP.run!(parsed)
+  case run(options)
+    ok(errors) ->
+      if errors.empty?
+        puts("bindings ok")
+      else
+        IO.warn("bindings do not match the headers:")
+        IO.warn(errors.join("\n"))
+        System.exit(1)
+      end
+
+    error(e) ->
+      IO.warn("bindings not checked: #{e.message}")
+      System.exit(2)
+  end
+end
+
+private
 
 # Agentica struct name -> C struct name.
 STRUCTS = {
@@ -68,6 +90,7 @@ TOOL_TIMEOUT_MS = 120_000
 struct Options
   headers: String
   source: String
+  release: String
   skip_sizes: Bool
 end
 
@@ -113,33 +136,20 @@ struct Ran
   stderr: String
 end
 
-def main() -> Void
-  parsed = parse(System.args())
-  options = OP.run!(parsed)
-  case run(options)
-    ok(errors) ->
-      if errors.empty?
-        puts("bindings ok")
-      else
-        IO.warn("bindings do not match the headers:")
-        IO.warn(errors.join("\n"))
-        System.exit(1)
-      end
-
-    error(e) ->
-      IO.warn("bindings not checked: #{e.message}")
-      System.exit(2)
-  end
-end
-
 def parse(args: List[String]) -> Result[Options]
   parser = OP.new(
     "agentica scripts/check_bindings.agc",
     "Checks the bindings of llama.agc against the llama.cpp headers",
     [],
     [
-      Opt(name: "headers", metavar: "DIR", default: "deps/headers", help: "the folder scripts/fetch-headers.sh fills"),
+      Opt(
+        name: "headers",
+        metavar: "DIR",
+        default: "deps/headers",
+        help: "the folder `scripts/fetch.agc headers` fills",
+      ),
       Opt(name: "source", metavar: "FILE", default: "src/llama_server/llama.agc", help: "the bindings"),
+      Opt(name: "release", metavar: "FILE", default: "scripts/llama-release", help: "the pinned release: its tag"),
       Opt(name: "skip-sizes", kind: Kind.Flag, help: "skip the C compiler and the sizes"),
     ],
   )
@@ -149,6 +159,7 @@ def parse(args: List[String]) -> Result[Options]
     Options(
       headers: OP.string(parsed, "headers"),
       source: OP.string(parsed, "source"),
+      release: OP.string(parsed, "release"),
       skip_sizes: OP.flag(parsed, "skip-sizes"),
     ),
   )
@@ -156,6 +167,7 @@ end
 
 ## The mismatches, one text each; an error when something cannot be read or run.
 def run(options: Options) -> Result[List[String]]
+  try same_release(options.headers, options.release)
   header = try read_header(options.headers)
   blocks = try read_blocks(options.source)
   errors = check_structs(header, blocks) + check_functions(header, blocks)
@@ -167,9 +179,24 @@ end
 
 # --- the headers
 
+## The headers must be the ones of the pinned release: `fetch.agc headers` writes its tag in `TAG`.
+def same_release(dir: String, release: String) -> Result[Void]
+  pinned = (try File.read_text(release)).split(" ")[0].strip()
+  fetched = case File.read_text("#{dir}/TAG")
+    ok(text) -> text.strip()
+    error(_) -> ""
+  end
+
+  if fetched != pinned
+    return error("#{dir} is not from #{release} (#{pinned}): run agentica scripts/fetch.agc headers")
+  end
+
+  ok()
+end
+
 def read_header(dir: String) -> Result[Header]
   names = try Dir.list(dir)
-  return error("no llama.h in #{dir}: run scripts/fetch-headers.sh") if !names.include?("llama.h")
+  return error("no llama.h in #{dir}: run agentica scripts/fetch.agc headers") if !names.include?("llama.h")
 
   texts: List[String] = []
   headers = names.select do |n| n.end_with?(".h") end
@@ -407,6 +434,8 @@ def read_blocks(path: String) -> Result[Blocks]
         struct_name = ""
       elsif stripped != ""
         parts = stripped.split(":")
+        return error("llama.agc: `#{stripped}` in struct #{struct_name} is not `name: Type`") if parts.size != 2
+
         field = Field(name: parts[0].strip(), ctype: parts[1].strip())
         blocks = blocks.with(structs: blocks.structs.put(struct_name, blocks.structs.get(struct_name, []).push(field)))
       end
@@ -483,9 +512,8 @@ def compare_fields(header: Header, title: String, wanted: List[Field], got: List
   types: List[String] = []
   for f in wanted
     match = got.find do |g| g.name == f.name end
-    case match
-      error(_) -> types = types
-      ok(g) -> types = types + field_error(header, title, f, g)
+    if match.ok?
+      types = types + field_error(header, title, f, match.unwrap!)
     end
   end
 
@@ -513,9 +541,8 @@ def check_function(header: Header, name: String, got: Signature) -> List[String]
   case header.signatures.get(name)
     none -> ["#{name} is not in the headers"]
     some(wanted) if wanted.params.size != got.params.size ->
-      [
-        "#{name}: the header takes #{wanted.params.size} parameters (#{wanted.params.join(", ")}), llama.agc #{got.params.size} (#{got.params.join(", ")})",
-      ]
+      count = "the header takes #{wanted.params.size} parameters (#{wanted.params.join(", ")})"
+      ["#{name}: #{count}, llama.agc #{got.params.size} (#{got.params.join(", ")})"]
     some(wanted) ->
       params = (0...got.params.size).flat_map do |i|
         param_error(header, "#{name} parameter #{i + 1}", wanted.params[i], got.params[i])

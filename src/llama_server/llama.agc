@@ -1,7 +1,7 @@
 ## Bindings for the part of llama.cpp (llama.h, release v1.0.0, build b12359) that a server needs, with a small wrapper.
 ##
 ## The struct layouts are copied from llama.h of the same tag: a wrong field list is undefined behavior, so
-## `scripts/fetch-headers.sh` gets the header to compare with. Enums are `C.Int32`.
+## `agentica scripts/fetch.agc headers` gets the header to compare with. Enums are `C.Int32`.
 
 import Numbers from "numbers"
 
