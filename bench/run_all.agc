@@ -32,8 +32,6 @@ end
 private
 
 MODEL = "deps/qwen2.5-0.5b-instruct-q4_k_m.gguf"
-LLAMA_DIR = "native/linux"
-OUT = "bench/results/latest.json"
 SCOPE = ["--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0", "--"]
 CLOCK_TICKS = 100
 
@@ -109,7 +107,7 @@ def parse(args: List[String]) -> Result[OP.Parsed]
         kind: Kind.Flag,
         help: "a whole run in under 3 minutes: 4 threads, streaming, 32 tokens, 2 reps, fewer requests",
       ),
-      Opt(name: "agentica", default: "agentica"),
+      Opt(name: "agentica", default: "agentica", help: "the agentica binary (a path with a / is relative to --root)"),
       Opt(name: "only", choices: ["agentica", "llama-server"]),
       Opt(name: "order", default: "agentica,llama-server"),
       Opt(name: "threads", kind: Kind.Int, help: "default: nproc (4 with --quick)"),
@@ -124,7 +122,7 @@ def parse(args: List[String]) -> Result[OP.Parsed]
       Opt(
         name: "llama-dir",
         default: "native/linux",
-        help: "the folder of llama-server (the CPU or the Vulkan build), default: native/linux under the root",
+        help: "the folder of llama-server (the CPU or the Vulkan build), relative to --root",
       ),
       Opt(name: "concurrency", default: "1,4,16"),
       Opt(name: "reps", kind: Kind.Int, help: "default: 3 (2 with --quick)"),
@@ -145,7 +143,7 @@ def parse(args: List[String]) -> Result[OP.Parsed]
       Opt(name: "attempts", kind: Kind.Int, default: "1", help: "tries per run for --max-load-during"),
       Opt(name: "stream", kind: Kind.Flag, help: "every request says \"stream\": true; adds time to first token"),
       Opt(name: "port", kind: Kind.Int, default: "8123"),
-      Opt(name: "out", help: "default: bench/results/latest.json under the root"),
+      Opt(name: "out", default: "bench/results/latest.json", help: "the JSON of the runs, relative to --root"),
       Opt(name: "root", default: ".", help: "the repo root: server.agc, deps/ and native/linux are looked up there"),
     ],
   )
@@ -157,13 +155,18 @@ end
 def options_of(p: OP.Parsed) -> Result[Options]
   quick = OP.flag(p, "quick")
   root = try Path.real(OP.string(p, "root"))
-  llama_dir = try in_root(root, OP.string(p, "llama-dir"), LLAMA_DIR)
-  out = try in_root(root, OP.string(p, "out"), OUT)
+  llama_dir = try in_root(root, OP.string(p, "llama-dir"))
+  out = try in_root(root, OP.string(p, "out"))
+  agentica = OP.string(p, "agentica")
+  if agentica.include?("/")
+    agentica = try in_root(root, agentica)
+  end
+
   concurrencies = OP.string(p, "concurrency").split(",").map do |c| c.strip().to_i!() end
   ok(
     Options(
       quick: quick,
-      agentica: OP.string(p, "agentica"),
+      agentica: agentica,
       only: OP.optional_string(p, "only"),
       order: OP.string(p, "order").split(","),
       threads: OP.optional_int(p, "threads").unwrap_or(quick_or(quick, 4, cpu_count())),
@@ -186,11 +189,11 @@ def options_of(p: OP.Parsed) -> Result[Options]
   )
 end
 
-## `given` when there is one, else `fallback` under the root.
-def in_root(root: String, given: String, fallback: String) -> Result[String]
-  return ok(given) if given != ""
+## An absolute path as it is, a relative one under the root.
+def in_root(root: String, path: String) -> Result[String]
+  return ok(path) if path.start_with?("/")
 
-  Path.join([root, fallback])
+  Path.join([root, path])
 end
 
 def quick_or(quick: Bool, when_quick: Int, otherwise: Int) -> Int

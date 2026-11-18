@@ -4,17 +4,25 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
 ### Changed
 
-- **Breaking:** needs Agentica 0.34.1 or later and Bond 0.15.1: the sources use `private` instead of `export`, the nested builtin names (`JSON.Field`, `HTTP.ServerOptions`) and the `Error` record of a failed Result, and are formatted with `agentica fmt` (implicit returns, guards, one-line defs). `agentica.toml` names the oldest Agentica it needs. CI tests with Agentica 0.34.1. The request and response codecs are `ChatRequest.codec` and `ChatResponse.codec`.
-- llama.cpp v1.0.0, build b12359 (was b12012), the prebuilt Linux x86_64 CPU release, sha256-checked: the context parameters follow its new layout, and the manifest names `libllama.so.1` and `libggml.so.1`. v1.0.0 removes the deprecated functions of `llama.h` and `defrag_thold`; the server called none of them. The headers of the same build are fetched for the bindings check.
-- **Breaking:** the scripts are Agentica programs. `agentica scripts/fetch.agc llama|headers|model|all` replaces `scripts/fetch-llama.sh`, `fetch-headers.sh` and `fetch-model.sh`; `make fetch` runs `all`. The llama.cpp libraries are extracted into `native/linux/` (no `deps/llama.cpp` and links), the release is `scripts/llama-release` (the tag and the sha256 of the archive and of each header; the headers are checked before they are used) and the default model is `scripts/model`, and the benchmark runs `native/linux/llama-server`. The downloads follow redirects, are taken in pieces (a model is larger than the 256 MiB that `HTTP.download` writes) and are sha256-checked before they take their name.
-- **Breaking:** the tests and the benchmark are Agentica too: `tests/*_test.agc` run by `agentica test` (`make test`) replace `tests/test_*.py`, and `agentica bench/client.agc` and `agentica bench/run_all.agc` replace the Python scripts, with the same options and the same JSON keys (the JSON file is one line, not indented). No Python is needed.
+- **Breaking:** needs Agentica 0.34.1 and Bond 0.15.1.
+- llama.cpp b12359 (was b12012).
+- **Breaking:** the scripts are Agentica: `agentica scripts/fetch.agc llama|headers|model|all` replaces the `.sh` files.
+- **Breaking:** the tests and the benchmark are Agentica too (`tests/*_test.agc`, `bench/*.agc`): no Python needed.
 
 ### Added
 
-- `--gpu-layers N` (default 0) offloads layers to the GPU, and `agentica scripts/fetch.agc llama --variant vulkan` fetches the Vulkan build of the llama.cpp release. `--stats` `decode_ms` is not reliable on a GPU. `bench/run_all.agc` takes `--gpu-layers` and `--llama-dir` and the repo has a Vulkan benchmark (`bench/results/vulkan-c1-c4.md`).
-- `make check-bindings` compares the structs and functions of `llama.agc` with the llama.cpp headers (names, order, C types, parameters, that a resource is the pointer its `free:` function takes, the `sizeof` of each struct against the C compiler's, and the sizes that the helpers assume), and fails with a diff. CI runs it, and `make test-bindings` (`tests/bindings_test.agc`, run by `agentica test`) checks that it refuses each kind of wrong binding. The headers fetched are every one that `llama.h` includes.
+- `--gpu-layers N` offloads layers to a GPU; `fetch.agc llama --variant vulkan` fetches the Vulkan build.
+- `make check-bindings` compares `llama.agc` with the llama.cpp headers.
+- `bench/run_all.agc` takes `--gpu-layers`, `--llama-dir` and `--root`; Vulkan results in `bench/results/`.
+
+### Needs
+
+- Agentica 0.34.1 or later, Bond 0.15.1 (pinned in `agentica.toml`), llama.cpp b12359.
+- Linux x86_64 is the only supported platform.
 
 ## [0.1.0] - 2026-11-05
 
@@ -36,5 +44,6 @@ First release: a prototype LLM inference server, the Bond web framework in front
 - Agentica 0.24.1 or later, Bond 0.6.1 (pinned in `agentica.toml`), llama.cpp b12012.
 - Linux x86_64 (the prebuilt llama.cpp CPU build) is the only supported platform.
 
-[Unreleased]: https://github.com/agentica-lang/agentica-llama-server/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/agentica-lang/agentica-llama-server/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/agentica-lang/agentica-llama-server/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/agentica-lang/agentica-llama-server/releases/tag/0.1.0
