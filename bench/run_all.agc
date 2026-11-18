@@ -4,7 +4,8 @@
 ## Each server starts under a systemd scope with a memory cap, is warmed up, then each concurrency runs `--reps`
 ## times. The processes are the ones that this program started, and it stops exactly those. Run it from the repo root:
 ##
-## agentica bench/run_all.agc [--quick] [--only NAME] [--threads N] [--concurrency 1,4,16] [--stream] [--out FILE] ...
+## agentica bench/run_all.agc [--quick] [--only NAME] [--threads N] [--concurrency 1,4,16] [--stream] [--gpu-layers N]
+##                           [--llama-dir DIR] [--out FILE] ...
 ##
 ## It writes the JSON of every run to `--out` (bench/results/latest.json); `agentica bench/run_all.agc --help` lists the
 ## options.
@@ -31,7 +32,6 @@ end
 private
 
 MODEL = "deps/qwen2.5-0.5b-instruct-q4_k_m.gguf"
-LLAMA_SERVER = "native/linux/llama-server"
 SCOPE = ["--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0", "--"]
 CLOCK_TICKS = 100
 
@@ -43,6 +43,8 @@ struct Options
   threads: Int
   ctx: Int
   slots: Int
+  gpu_layers: Int
+  llama_dir: String
   concurrencies: List[Int]
   reps: Int
   max_tokens: Int
@@ -78,6 +80,7 @@ struct Report
   threads: Int
   ctx: Int
   slots: Int
+  gpu_layers: Int
   max_tokens: Int
   reps: Int
   stream: Bool
@@ -109,6 +112,17 @@ def parse(args: List[String]) -> Result[OP.Parsed]
       Opt(name: "threads", kind: Kind.Int, help: "default: nproc (4 with --quick)"),
       Opt(name: "ctx", kind: Kind.Int, default: "8192"),
       Opt(name: "slots", kind: Kind.Int, default: "8"),
+      Opt(
+        name: "gpu-layers",
+        kind: Kind.Int,
+        default: "0",
+        help: "layers to offload to the GPU, the same for both servers (--gpu-layers and -ngl)",
+      ),
+      Opt(
+        name: "llama-dir",
+        default: "native/linux",
+        help: "the folder of llama-server (the CPU or the Vulkan build)",
+      ),
       Opt(name: "concurrency", default: "1,4,16"),
       Opt(name: "reps", kind: Kind.Int, help: "default: 3 (2 with --quick)"),
       Opt(name: "max-tokens", kind: Kind.Int, help: "default: 64 (32 with --quick)"),
@@ -147,6 +161,8 @@ def options_of(p: OP.Parsed) -> Options
     threads: OP.optional_int(p, "threads").unwrap_or(quick_or(quick, 4, cpu_count())),
     ctx: OP.int(p, "ctx"),
     slots: OP.int(p, "slots"),
+    gpu_layers: OP.int(p, "gpu-layers"),
+    llama_dir: OP.string(p, "llama-dir"),
     concurrencies: concurrencies,
     reps: OP.optional_int(p, "reps").unwrap_or(quick_or(quick, 2, 3)),
     max_tokens: OP.optional_int(p, "max-tokens").unwrap_or(quick_or(quick, 32, 64)),
@@ -180,6 +196,7 @@ def run(options: Options) -> Result[Void]
     threads: options.threads,
     ctx: options.ctx,
     slots: options.slots,
+    gpu_layers: options.gpu_layers,
     max_tokens: options.max_tokens,
     reps: options.reps,
     stream: options.stream,
@@ -222,16 +239,41 @@ def command(options: Options, name: String, port: Int) -> Result[List[String]]
   threads = options.threads.to_s
   slots = options.slots.to_s
   ctx = options.ctx.to_s
+  layers = options.gpu_layers.to_s
   case name
     "agentica" ->
       ok([
         options.agentica, "server.agc", "--port", port.to_s, "--threads", threads, "--ctx", ctx, "--parallel", slots,
-        "--batch", "2048",
+        "--batch", "2048", "--gpu-layers", layers,
       ])
     "llama-server" ->
       ok([
-        LLAMA_SERVER, "-m", MODEL, "--host", "127.0.0.1", "--port", port.to_s, "-t", threads, "-tb", threads, "-c",
-        ctx, "-np", slots, "-b", "2048", "-ub", "512", "--no-webui", "--no-cache-prompt", "-cram", "0", "--no-warmup",
+        "#{options.llama_dir}/llama-server",
+        "-m",
+        MODEL,
+        "--host",
+        "127.0.0.1",
+        "--port",
+        port.to_s,
+        "-t",
+        threads,
+        "-tb",
+        threads,
+        "-c",
+        ctx,
+        "-np",
+        slots,
+        "-ngl",
+        layers,
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "--no-webui",
+        "--no-cache-prompt",
+        "-cram",
+        "0",
+        "--no-warmup",
       ])
     _ -> error("unknown server #{name}: agentica or llama-server")
   end
