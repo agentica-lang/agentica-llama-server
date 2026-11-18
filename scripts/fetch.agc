@@ -159,6 +159,9 @@ def read_release() -> Result[Release]
     if words[0].include?("/")
       pins = pins.push(Pin(name: words[0], sha256: words[1]))
     else
+      return error("#{RELEASE_FILE}: `#{line}`: cpu is the first line") if words[0] == "cpu"
+      return error("#{RELEASE_FILE}: `#{line}`: variant #{words[0]} twice") if archives.key?(words[0])
+
       archives = archives.put(words[0], words[1])
     end
   end

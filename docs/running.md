@@ -61,9 +61,9 @@ Agentica.
 
 ## GPU
 
-`--gpu-layers N` (default 0, the CPU) offloads N layers of the model to the GPU; a number above the layer count, such as
-99, offloads all of them. It needs a build of llama.cpp with a GPU backend, and the server loads the backends from
-`--backends` (`native/linux`):
+`--gpu-layers N` (default 0, the CPU) offloads N layers of the model to the GPU; `-1`, or a number above the layer count
+such as 99, offloads all of them. It needs a build of llama.cpp with a GPU backend, and the server loads the backends
+from `--backends` (`native/linux`):
 
 ```sh
 agentica scripts/fetch.agc llama --variant vulkan
@@ -71,10 +71,10 @@ agentica server.agc --gpu-layers 99
 ```
 
 `--variant vulkan` fetches the Vulkan build of the same release (it adds `libggml-vulkan.so`; the other libraries have
-the same names, so `agentica.toml` does not change). Vulkan needs a driver on the machine, for example Mesa's RADV for
-an AMD GPU or iGPU (`mesa-vulkan-drivers`). `fetch.agc llama` with no variant
-puts the CPU build back. On one AMD iGPU all 25 layers of the 0.5B model were offloaded, and the prompt
-was about 8 times faster than on the CPU.
+the same names, so `agentica.toml` does not change). Vulkan needs `libvulkan1` and a driver on the machine, for example
+Mesa's RADV for an AMD GPU or iGPU (`mesa-vulkan-drivers`). `fetch.agc llama` with no variant puts the CPU build back.
+On one AMD iGPU all 25 layers of the 0.5B model were offloaded and the prompt was about 8 times faster than on the CPU
+(measured once).
 
 With a GPU, the `--stats` `decode_ms` is not reliable: `llama_decode` returns before the GPU is done, and the wait lands
 in `agentica_ms`. CI has no GPU: it runs the CPU build with `--gpu-layers 0`.

@@ -201,7 +201,7 @@ end
 
 ## Runs `fetch.agc llama ARGS` in `dir` against a release (CPU and Vulkan archives of the same bytes) whose archive has
 ## no member of the release, with old libraries in place. Returns the folder of the libraries.
-def fetch_llama_from_bad_archive(dir: String, args: List[String]) -> Result[Ran]
+def fetch_llama_from_bad_archive(dir: String, args: List[String], stamp: String) -> Result[Ran]
   archive = try make_archive(dir)
   bytes = try File.open(archive) do |f| File.read_bytes(f, 1_048_576) end
   sha256 = OpenSSL.Digest.hexencode(try File.sha256(archive))
@@ -209,7 +209,7 @@ def fetch_llama_from_bad_archive(dir: String, args: List[String]) -> Result[Ran]
   try File.write_text(try Path.join([dir, "scripts", "llama-release"]), "tTest #{sha256}\nvulkan #{sha256}\n")
   libraries = try Path.join([dir, "native", "linux"])
   try Dir.mkdir(libraries)
-  try File.write_text(try Path.join([libraries, "TAG"]), "old")
+  try File.write_text(try Path.join([libraries, "TAG"]), stamp)
   try File.write_text(try Path.join([libraries, "libllama.so.1"]), "kept")
   server = try HTTP.serve("127.0.0.1", 0, HTTP.app(->(request) { archive_answer(bytes, request) }, 1024))
   ran = run_fetch(dir, ["llama"] + args, {"LLAMA_RELEASES": "http://127.0.0.1:#{HTTP.local_port(server)}"})
@@ -217,38 +217,59 @@ def fetch_llama_from_bad_archive(dir: String, args: List[String]) -> Result[Ran]
   ran
 end
 
-def old_libraries_are_there(dir: String) -> Result[Void]
+def old_libraries_are_there(dir: String, stamp: String) -> Result[Void]
   libraries = try Path.join([dir, "native", "linux"])
   try Test.eq(try Dir.list(libraries), ["TAG", "libllama.so.1"])
-  try Test.eq(try File.read_text(try Path.join([libraries, "TAG"])), "old")
+  try Test.eq(try File.read_text(try Path.join([libraries, "TAG"])), stamp)
   Test.eq(try Dir.list(try Path.join([dir, "native"])), ["linux"])
 end
 
 def test_a_failed_extraction_keeps_the_libraries_that_are_there() -> Result[Void]
   with_dir("extract") do |dir|
-    ran = try fetch_llama_from_bad_archive(dir, [])
+    ran = try fetch_llama_from_bad_archive(dir, [], "old")
     try Test.eq(ran.code, 1)
     try Test.assert(ran.stdout.include?("ubuntu-x64.tar.gz: sha256 ok"), ran.stdout)
     try Test.eq(try deps(dir), [])
-    old_libraries_are_there(dir)
+    old_libraries_are_there(dir, "old")
   end
 end
 
 def test_the_vulkan_variant_takes_the_vulkan_archive() -> Result[Void]
   with_dir("vulkan") do |dir|
-    ran = try fetch_llama_from_bad_archive(dir, ["--variant", "vulkan"])
+    ran = try fetch_llama_from_bad_archive(dir, ["--variant", "vulkan"], "old")
     try Test.eq(ran.code, 1)
     try Test.assert(ran.stdout.include?("ubuntu-vulkan-x64.tar.gz: sha256 ok"), ran.stdout)
     try Test.eq(try deps(dir), [])
-    old_libraries_are_there(dir)
+    old_libraries_are_there(dir, "old")
   end
 end
 
 def test_an_unknown_variant_is_refused() -> Result[Void]
   with_dir("variant") do |dir|
-    ran = try fetch_llama_from_bad_archive(dir, ["--variant=cuda"])
+    ran = try fetch_llama_from_bad_archive(dir, ["--variant=cuda"], "old")
     try Test.eq(ran.code, 1)
     try Test.assert(ran.stderr.include?("unknown variant cuda: cpu, vulkan"), ran.stderr)
-    old_libraries_are_there(dir)
+    old_libraries_are_there(dir, "old")
+  end
+end
+
+## The TAG of the libraries says the release and the variant: the bare tag is the CPU build, `tag variant` another.
+def test_the_tag_says_which_build_is_there() -> Result[Void]
+  try with_dir("stamp-vulkan") do |dir|
+    ran = try fetch_llama_from_bad_archive(dir, ["--variant", "vulkan"], "tTest")
+    try Test.assert(ran.stdout.include?("ubuntu-vulkan-x64.tar.gz: sha256 ok"), ran.stdout)
+    Test.eq(ran.code, 1)
+  end
+
+  try with_dir("stamp-cpu") do |dir|
+    ran = try fetch_llama_from_bad_archive(dir, [], "tTest vulkan")
+    try Test.assert(ran.stdout.include?("ubuntu-x64.tar.gz: sha256 ok"), ran.stdout)
+    Test.eq(ran.code, 1)
+  end
+
+  with_dir("stamp-same") do |dir|
+    ran = try fetch_llama_from_bad_archive(dir, [], "tTest")
+    try Test.eq(ran.code, 0)
+    Test.assert(ran.stdout.include?("already fetched"), ran.stdout)
   end
 end

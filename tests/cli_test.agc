@@ -58,8 +58,9 @@ def test_an_unknown_option_exits_2() -> Result[Void]
   says(ran.stderr, "unknown option --bogus")
 end
 
-## Every flag in one of its forms; the command line is accepted, so the run fails at the missing model.
-def test_valid_flags_reach_the_model_load() -> Result[Void]
+## Every flag in one of its forms: the command line is accepted, so the run goes on to the load and fails at the
+## missing model.
+def test_the_flags_are_accepted() -> Result[Void]
   flags = [
     "--model", "/nonexistent.gguf", "--backends", "native/linux", "--host", "127.0.0.1", "--port=0", "--threads", "2",
     "--ctx", "4096", "--parallel", "4", "--batch", "512", "--gpu-layers", "99", "--stats", "on",

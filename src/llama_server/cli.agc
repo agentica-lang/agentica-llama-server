@@ -56,7 +56,7 @@ def parser() -> OP.Parser
         name: "gpu-layers",
         kind: Kind.Int,
         default: "0",
-        help: "layers to offload to the GPU (needs a GPU backend in --backends)",
+        help: "layers to offload to the GPU, -1 or a large number for all (needs a GPU backend in --backends)",
       ),
       Opt(name: "stats", choices: ["on", "off"], default: "off", help: "print engine timings every 5 s of work"),
     ],
