@@ -1,8 +1,9 @@
-## scripts/fetch.agc `model`, against a local server that redirects and serves byte ranges (the way Hugging Face and
-## its CDN do): the download follows the redirect (absolute, relative or a loop), takes the file in pieces and checks its
-## sha256. `agentica test` runs
+## scripts/fetch.agc against a local server that redirects and serves byte ranges (the way Hugging Face and its CDN
+## do): the download follows the redirect (absolute, relative or a loop), takes the file in pieces and checks its sha256;
+## a failed fetch leaves what was there. `agentica test` runs
 ## it from the repo root; it needs no network and fetches nothing else.
 
+import Fetch from "../scripts/fetch"
 import HTTP from "std/http"
 import Regex from "std/regex"
 
@@ -71,17 +72,25 @@ def with_server(body: Fn[Int, Result[Void]]) -> Result[Void]
   result
 end
 
-## Runs `fetch.agc model REPO m.gguf SHA256` in `dir`, against the server on `port` (with a slash after the endpoint).
-def fetch(dir: String, port: Int, repo: String, sha256: String) -> Result[Ran]
+## Runs `fetch.agc ARGS` in `dir` with the given environment.
+def run_fetch(dir: String, args: List[String], env: Map[String, String]) -> Result[Ran]
   script = try Path.real(SCRIPT)
   agentica = System.env("AGENTICA").unwrap_or("agentica")
-  endpoint = "http://127.0.0.1:#{port}/"
-  options = Process.Options(timeout_ms: TIMEOUT_MS, chdir: dir, env: {"HF_ENDPOINT": endpoint})
-  process = try Process.spawn_captured(agentica, [script, "model", repo, "m.gguf", sha256], options)
+  process = try Process.spawn_captured(
+    agentica,
+    [script] + args,
+    Process.Options(timeout_ms: TIMEOUT_MS, chdir: dir, env: env),
+  )
+
   code = try Process.wait(process, TIMEOUT_MS)
   out = try Process.output(process, TIMEOUT_MS)
   Process.close(process)
   ok(Ran(code: code, stdout: out.stdout, stderr: out.stderr))
+end
+
+## `fetch.agc model REPO m.gguf SHA256` against the server on `port` (with a slash after the endpoint).
+def fetch(dir: String, port: Int, repo: String, sha256: String) -> Result[Ran]
+  run_fetch(dir, ["model", repo, "m.gguf", sha256], {"HF_ENDPOINT": "http://127.0.0.1:#{port}/"})
 end
 
 def deps(dir: String) -> Result[List[String]] = Dir.list(try Path.join([dir, "deps"]))
@@ -127,4 +136,89 @@ end
 
 def test_a_server_that_ignores_range_fails_with_a_hint() -> Result[Void]
   refused("Plain", OpenSSL.Digest.sha256_hexdigest(DATA), "the server ignores Range")
+end
+
+def test_a_stale_model_is_replaced() -> Result[Void]
+  sha256 = OpenSSL.Digest.sha256_hexdigest(DATA)
+  with_server do |port|
+    with_dir("stale") do |dir|
+      try Dir.mkdir(try Path.join([dir, "deps"]))
+      try File.write_text(try Path.join([dir, "deps", "m.gguf"]), "truncated")
+      ran = try fetch(dir, port, "Org/Repo", sha256)
+      try Test.eq(ran.code, 0)
+      try Test.eq(try deps(dir), ["m.gguf"])
+      Test.eq(OpenSSL.Digest.hexencode(try File.sha256(try Path.join([dir, "deps", "m.gguf"]))), sha256)
+    end
+  end
+end
+
+def test_a_missing_file_is_not_retried() -> Result[Void]
+  with_server do |port|
+    with_dir("missing") do |dir|
+      ran = try fetch(dir, port, "Org/Missing", "0" * 64)
+      try Test.eq(ran.code, 1)
+      try Test.assert(ran.stderr.include?("HTTP 404"), ran.stderr)
+      Test.assert(!ran.stderr.include?("trying again"), ran.stderr)
+    end
+  end
+end
+
+def test_a_redirect_never_leaves_https() -> Result[Void]
+  try Test.assert(Fetch.downgrade?("https://a.test/x", "http://a.test/x"), "https to http")
+  try Test.assert(!Fetch.downgrade?("https://a.test/x", "https://b.test/x"), "https to https")
+  Test.assert(!Fetch.downgrade?("http://a.test/x", "http://b.test/x"), "http to http")
+end
+
+def test_a_location_is_resolved_against_the_url() -> Result[Void]
+  base = "https://a.test/dir/file?x=1#top"
+  try Test.eq(Fetch.absolute(base, "https://b.test/p"), "https://b.test/p")
+  try Test.eq(Fetch.absolute(base, "//b.test/p"), "https://b.test/p")
+  try Test.eq(Fetch.absolute(base, "/p?y=2"), "https://a.test/p?y=2")
+  try Test.eq(Fetch.absolute(base, "other"), "https://a.test/dir/other")
+  Test.eq(Fetch.absolute("http://a.test", "other"), "http://a.test/other")
+end
+
+def archive_answer(bytes: Bytes, request: HTTP.Request) -> Result[HTTP.Response]
+  if request.path == "/tTest/llama-tTest-bin-ubuntu-x64.tar.gz"
+    return ok(HTTP.Response(status: 200, headers: [], body: bytes))
+  end
+
+  ok(HTTP.Response(status: 404, headers: [], body: "".bytes))
+end
+
+## An archive of one file that is not a member of the release.
+def make_archive(dir: String) -> Result[String]
+  work = try Path.join([dir, "work"])
+  try Dir.mkdir(try Path.join([work, "llama-tTest"]))
+  try File.write_text(try Path.join([work, "llama-tTest", "other.txt"]), "not a library")
+  archive = try Path.join([dir, "release.tar.gz"])
+  tar = try Process.spawn_captured("tar", ["-czf", archive, "-C", work, "llama-tTest"])
+  code = try Process.wait(tar, TIMEOUT_MS)
+  Process.close(tar)
+  return error("tar failed") if code != 0
+
+  ok(archive)
+end
+
+def test_a_failed_extraction_keeps_the_libraries_that_are_there() -> Result[Void]
+  with_dir("extract") do |dir|
+    archive = try make_archive(dir)
+    bytes = try File.open(archive) do |f| File.read_bytes(f, 1_048_576) end
+    sha256 = OpenSSL.Digest.hexencode(try File.sha256(archive))
+    try Dir.mkdir(try Path.join([dir, "scripts"]))
+    try File.write_text(try Path.join([dir, "scripts", "llama-release"]), "tTest #{sha256}\n")
+    libraries = try Path.join([dir, "native", "linux"])
+    try Dir.mkdir(libraries)
+    try File.write_text(try Path.join([libraries, "TAG"]), "old")
+    try File.write_text(try Path.join([libraries, "libllama.so.1"]), "kept")
+    server = try HTTP.serve("127.0.0.1", 0, HTTP.app(->(request) { archive_answer(bytes, request) }, 1024))
+    ran = run_fetch(dir, ["llama"], {"LLAMA_RELEASES": "http://127.0.0.1:#{HTTP.local_port(server)}"})
+    HTTP.close_server(server)
+    result = try ran
+    try Test.eq(result.code, 1)
+    try Test.eq(try Dir.list(libraries), ["TAG", "libllama.so.1"])
+    try Test.eq(try File.read_text(try Path.join([libraries, "TAG"])), "old")
+    try Test.eq(try Dir.list(try Path.join([dir, "native"])), ["linux"])
+    Test.eq(try deps(dir), [])
+  end
 end
