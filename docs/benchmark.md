@@ -18,7 +18,7 @@ run was capped at 1.4 GHz, so **the absolute numbers here are about 1.5 to 2 tim
 tokens per second here, against 15 to 24 there) and cannot be compared with the old ones. Both servers ran back to back
 under the same state, so **the ratios between the two servers are what matter**.
 
-It is a **shared machine**: other agents run builds and test suites on it. The runner (`bench/run_all.py`) waits for
+It is a **shared machine**: other agents run builds and test suites on it. The runner (`bench/run_all.agc`) waits for
 fewer than 1.5 busy neighbour cores before each run, measures the cores the neighbours used *during* the run (the
 machine's busy cores minus what the server and the client used), and redoes a run once when that was over 1.2.
 The machine was idle for this run: neighbour cores during the kept runs were 0.2 to 0.4 (highest single run 0.40), no run
@@ -33,7 +33,7 @@ request says `cache_prompt: false`, so it cannot skip the prompt work. Each serv
 `systemd-run --user --scope -q -p MemoryMax=6G -p MemorySwapMax=0 --` (a cap far above the 0.8 GB they use, so it does
 not touch the timing) and is stopped by the PID the script started.
 
-`bench/client.py` is closed-loop: N threads send requests back to back (full mode: 16 requests at concurrency 1 and 4,
+`bench/client.agc` is closed-loop: N tasks send requests back to back (full mode: 16 requests at concurrency 1 and 4,
 64 at concurrency 16; quick mode: 4, 8 and 16). Eight different prompts rotate; the system prompt is explicit so both
 chat templates give the same prompt (about 28 prompt tokens per request). After a warm-up, each concurrency runs 3 times
 per server (2 in the quick mode), **alternating the servers rep by rep**, and the full tables show medians of the 3.
@@ -52,15 +52,15 @@ the identity check, a short warm-up, one try per run. `--threads`, `--reps` and 
 them. The neighbour load is only recorded (it is not used to redo a run):
 
 ```sh
-python3 bench/run_all.py --agentica /path/to/agentica --quick --max-load 1.5
+agentica bench/run_all.agc --agentica /path/to/agentica --quick --max-load 1.5
 ```
 
 The full mode (about 20 minutes per set) is the one that has 3 reps, `max_tokens` 64, more requests and a batched
 identity check; the full tables below come from it:
 
 ```sh
-python3 bench/run_all.py --agentica /path/to/agentica --threads 4 --max-load 1.5 --max-load-during 1.2 --attempts 2 --patience 300
-python3 bench/run_all.py ... --stream      # adds time to first token
+agentica bench/run_all.agc --agentica /path/to/agentica --threads 4 --max-load 1.5 --max-load-during 1.2 --attempts 2 --patience 300
+agentica bench/run_all.agc ... --stream      # adds time to first token
 ```
 
 ## Results without streaming
@@ -161,8 +161,8 @@ No request failed in any run.
 
 **Not rerun**: this is the 0.19.0-beta.1 result (Bond 0.2.0, capped CPU), kept in
 [bench/results/0.19.0-beta.1/health.json](../bench/results/0.19.0-beta.1/health.json). Medians of 3 runs. Measured by
-hand, not by `run_all.py`: both servers started with `taskset -c 0-3` (4 threads, `-c 8192`, 8 slots), then `python3
-bench/client.py --url URL --concurrency N --requests 3000 --health` for each server and concurrency, three times in turn.
+hand, not by `run_all.agc` (a Python script then, `bench/client.agc` now, with the same options): both servers started with `taskset -c 0-3` (4 threads, `-c 8192`, 8 slots), then
+`bench/client.agc --url URL --concurrency N --requests 3000 --health` for each server and concurrency, three times in turn.
 
 | server | concurrency | req/s | p50 ms | p95 ms |
 |---|---|---|---|---|
@@ -177,7 +177,7 @@ bench/client.py --url URL --concurrency N --requests 3000 --health` for each ser
 
 - Greedy answers of the two servers are identical for all 8 prompts at concurrency 1 (64 tokens each) in the three full
   sets, and for the 4 prompts (32 tokens) of the quick run.
-- The streamed text equals the non-streaming greedy text (`tests/test_api.py`, with multi-byte emoji that split
+- The streamed text equals the non-streaming greedy text (`tests/api_test.agc`, with multi-byte emoji that split
   across tokens).
 - Decoded side by side (concurrency 8), answers drift from the one-at-a-time ones late in the text in both servers
   (agentica-llama-server 0 to 1 of 8 identical, llama-server 0 to 2 of 8): the batch shape changes the float reduction

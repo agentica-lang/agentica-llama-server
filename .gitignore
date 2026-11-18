@@ -1,5 +1,6 @@
 deps/
 *.agcb
 native/linux/
+native/linux.new/
 bench/results/*.log
 tests/*.log

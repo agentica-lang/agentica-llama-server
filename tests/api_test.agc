@@ -290,7 +290,8 @@ end
 def leave_after_first_event(port: Int, body: String) -> Result[Void]
   socket = try TCP.connect("127.0.0.1", port, TIMEOUT_MS)
   head = (
-    "POST /v1/chat/completions HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: #{body.bytes.size}\r\n\r\n"
+    "POST /v1/chat/completions HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n" +
+    "Content-Length: #{body.bytes.size}\r\n\r\n"
   )
 
   got = read_after_send(socket, head + body)

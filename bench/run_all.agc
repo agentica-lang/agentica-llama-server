@@ -645,7 +645,7 @@ def identity_lines(results: Map[String, ServerResult]) -> List[String]
   for name in results.keys
     if results[name].batched_same.some?
       lines = lines.push(
-        "#{name}: #{results[name].batched_same.unwrap!()} of 8 answers at concurrency 8 equal the ones at concurrency 1.",
+        "#{name}: #{results[name].batched_same.unwrap!()} of 8 answers at concurrency 8 equal those at concurrency 1.",
       )
     end
   end

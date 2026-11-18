@@ -96,7 +96,7 @@ jobs:
           agentica --version
           make install
 
-      # tests/ uses unittest from the standard library; nothing to pip install.
+      # The tests are Agentica programs run by `agentica test`.
       - name: Test
         run: make test
 
