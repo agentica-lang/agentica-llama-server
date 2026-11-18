@@ -18,7 +18,7 @@ curl -N localhost:8080/v1/chat/completions -H 'content-type: application/json' \
   -d '{"messages":[{"role":"user","content":"Say hello."}],"max_tokens":32,"stream":true}'
 ```
 
-Needs Agentica 0.31.2 or later; Bond 0.12.0 is pinned in `agentica.toml`. Linux x86_64 is the only supported platform.
+Needs Agentica 0.34.1 or later; Bond 0.15.1 is pinned in `agentica.toml`. Linux x86_64 is the only supported platform.
 
 Changes per release: [CHANGELOG.md](CHANGELOG.md).
 
