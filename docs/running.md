@@ -57,9 +57,10 @@ Agentica.
 ```sh
 AGENTICA=/path/to/agentica python3 -m unittest tests.test_api
 AGENTICA=/path/to/agentica python3 -m unittest tests.test_cli
+agentica test tests/bindings_test.agc
 ```
 
-`make check`, `make fmt-check` and `make test` run the type check, the format check and both test modules (`make install`
+`make check`, `make fmt-check` and `make test` run the type check, the format check and the three test files (`make install`
 fetches the packages; `AGENTICA=` picks the binary). CI runs them on Linux with the pinned Agentica release, in
 [.github/workflows/ci.yml](../.github/workflows/ci.yml).
 
@@ -68,3 +69,9 @@ non-streaming greedy answer, UTF-8 stays whole, the stream ends with `[DONE]`) a
 free their slots.
 
 `tests.test_cli` checks the flags (`--help`, bad values, a valid set) and needs the llama.cpp libraries, not the model.
+
+`tests/bindings_test.agc` runs `scripts/check_bindings.agc` on the committed `llama.agc` (it must pass), then on copies with one
+mistake each: a removed or swapped field, a wrong field or parameter type, a missing parameter, an unknown function, a wrong
+`free:`, a resource in the place of another, a wrong helper size, a struct size that differs from the C one. Each must fail and
+name its struct or function. It needs the headers, the llama.cpp libraries and `cc`; `make test-bindings` also checks the
+count of passed tests.

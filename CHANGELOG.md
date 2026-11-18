@@ -11,7 +11,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Added
 
-- `make check-bindings` compares the structs and functions of `llama.agc` with the llama.cpp headers (names, order, C types, parameters, that a resource is the pointer its `free:` function takes, the `sizeof` of each struct against the C compiler's, and the sizes that the helpers assume), and fails with a diff. CI runs it. `scripts/fetch-headers.sh` now gets every header `llama.h` includes, and both fetch scripts read the tag from `scripts/llama-tag`.
+- `make check-bindings` compares the structs and functions of `llama.agc` with the llama.cpp headers (names, order, C types, parameters, that a resource is the pointer its `free:` function takes, the `sizeof` of each struct against the C compiler's, and the sizes that the helpers assume), and fails with a diff. CI runs it, and `make test-bindings` (`tests/bindings_test.agc`, run by `agentica test`) checks that it refuses each kind of wrong binding. `scripts/fetch-headers.sh` now gets every header `llama.h` includes, and both fetch scripts read the tag from `scripts/llama-tag`.
 
 ## [0.1.0] - 2026-11-05
 

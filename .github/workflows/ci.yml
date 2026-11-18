@@ -56,6 +56,9 @@ jobs:
       - name: Check the bindings
         run: make check-bindings
 
+      - name: Test the bindings check
+        run: make test-bindings
+
   # The server loads a 0.5B model on the CPU of the runner and answers a few short prompts.
   test:
     runs-on: ubuntu-latest
