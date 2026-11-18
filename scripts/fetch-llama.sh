@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Fetches the pinned prebuilt CPU llama.cpp release (libllama.so, ggml libs,
-# llama-server) into deps/llama.cpp. Nothing here is committed.
+# llama-server) into deps/llama.cpp. Nothing here is committed. The tag is scripts/llama-tag, the one of
+# scripts/fetch-headers.sh; a new tag needs its SHA256 below.
 set -euo pipefail
-TAG="b12359"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+TAG="$(cat "$root/scripts/llama-tag")"
 FILE="llama-${TAG}-bin-ubuntu-x64.tar.gz"
 URL="https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/${FILE}"
 SHA256="0bc1f091e8916102b6d8f2cf944233a620e90a0f856c72d0ce41150c65c2e72e"
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$root/deps/llama.cpp"
 mkdir -p "$root/deps"
 if [ -x "$dest/llama-server" ] && [ "$(cat "$dest/TAG" 2>/dev/null)" = "$TAG" ]; then

@@ -16,9 +16,13 @@ agentica install
   any other public GGUF model on Hugging Face, pass the repo, the file and its sha256, for example
   `scripts/fetch-model.sh Qwen/Qwen2.5-1.5B-Instruct-GGUF qwen2.5-1.5b-instruct-q4_k_m.gguf <sha256>`, then run the
   server with `--model deps/qwen2.5-1.5b-instruct-q4_k_m.gguf`.
-- [scripts/fetch-headers.sh](../scripts/fetch-headers.sh): `llama.h` of the same tag, only to compare the struct
-  layouts in `src/llama_server/llama.agc`. The release archive ships no headers, so the struct layouts were copied from `llama.h` at
-  tag `b12359` (v1.0.0); a wrong field list is undefined behavior, so re-check them if you change the tag.
+- [scripts/fetch-headers.sh](../scripts/fetch-headers.sh): `llama.h` of the same tag and the headers it includes, into
+  `deps/headers`. The release archive ships no headers, and the structs and signatures of `src/llama_server/llama.agc`
+  are copied from `llama.h`. A wrong field list is undefined behavior, so `make check-bindings` (after this script and
+  `scripts/fetch-llama.sh`) compares them: the field names, order and C types of each bound struct, the parameters and
+  result of each bound function, and the size of each struct with the `sizeof` of the C compiler (`cc`, or
+  `agentica scripts/check_bindings.agc --skip-sizes` without one). The check is `scripts/check_bindings.agc`. Run it when you change
+  the tag (`scripts/llama-tag`, which both fetch scripts read; `fetch-llama.sh` also needs the new sha256); CI runs it.
 - `agentica install`: Bond 0.15.1 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
   `agentica.lock`).
 
@@ -53,9 +57,10 @@ Agentica.
 ```sh
 AGENTICA=/path/to/agentica python3 -m unittest tests.test_api
 AGENTICA=/path/to/agentica python3 -m unittest tests.test_cli
+agentica test tests/bindings_test.agc
 ```
 
-`make check`, `make fmt-check` and `make test` run the type check, the format check and both test modules (`make install`
+`make check`, `make fmt-check` and `make test` run the type check, the format check and the three test files (`make install`
 fetches the packages; `AGENTICA=` picks the binary). CI runs them on Linux with the pinned Agentica release, in
 [.github/workflows/ci.yml](../.github/workflows/ci.yml).
 
@@ -64,3 +69,9 @@ non-streaming greedy answer, UTF-8 stays whole, the stream ends with `[DONE]`) a
 free their slots.
 
 `tests.test_cli` checks the flags (`--help`, bad values, a valid set) and needs the llama.cpp libraries, not the model.
+
+`tests/bindings_test.agc` runs `scripts/check_bindings.agc` on the committed `llama.agc` (it must pass), then on copies with one
+mistake each: a removed or swapped field, a wrong field or parameter type, a missing parameter, an unknown function, a wrong
+`free:`, a resource in the place of another, a wrong helper size, a struct size that differs from the C one. Each must fail and
+name its struct or function. It needs the headers, the llama.cpp libraries and `cc`; `make test-bindings` also checks the
+count of passed tests.
