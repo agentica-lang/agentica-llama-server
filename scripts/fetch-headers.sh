@@ -2,7 +2,7 @@
 # The release archive ships no headers. The struct layouts in src/llama_server/llama.agc are
 # copied from llama.h of the same tag; this fetches it for reference/checking.
 set -euo pipefail
-TAG="b12426"
+TAG="b12359"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$root/deps/headers"
 for f in include/llama.h ggml/include/ggml.h ggml/include/ggml-backend.h; do

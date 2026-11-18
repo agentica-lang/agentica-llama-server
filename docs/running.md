@@ -9,7 +9,7 @@ scripts/fetch-headers.sh
 agentica install
 ```
 
-- [scripts/fetch-llama.sh](../scripts/fetch-llama.sh): llama.cpp b12426, Linux x86-64 CPU build, sha256-checked, into
+- [scripts/fetch-llama.sh](../scripts/fetch-llama.sh): llama.cpp v1.0.0 (build b12359), Linux x86-64 CPU build, sha256-checked, into
   `deps/llama.cpp`. It also links the libraries into `native/linux/` because Agentica only loads `[native]` files from
   a `native/` folder (see [gaps.md](gaps.md)).
 - [scripts/fetch-model.sh](../scripts/fetch-model.sh): Qwen2.5-0.5B-Instruct Q4_K_M, sha256-checked, into `deps/`. For
@@ -18,7 +18,7 @@ agentica install
   server with `--model deps/qwen2.5-1.5b-instruct-q4_k_m.gguf`.
 - [scripts/fetch-headers.sh](../scripts/fetch-headers.sh): `llama.h` of the same tag, only to compare the struct
   layouts in `src/llama_server/llama.agc`. The release archive ships no headers, so the struct layouts were copied from `llama.h` at
-  tag `b12426`; a wrong field list is undefined behavior, so re-check them if you change the tag.
+  tag `b12359` (v1.0.0); a wrong field list is undefined behavior, so re-check them if you change the tag.
 - `agentica install`: Bond 0.15.1 (git dependency, pinned by tag in `agentica.toml` and by commit and hash in
   `agentica.lock`).
 
