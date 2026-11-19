@@ -1,13 +1,14 @@
-# Needs Agentica 0.34.1 or later on PATH (or AGENTICA=/path/to/agentica).
+# Needs Agentica 0.35.0 or later on PATH (or AGENTICA=/path/to/agentica).
 AGENTICA ?= agentica
 
 # The number of tests each file of tests/ has: a run that tests fewer, or nothing, fails.
 BINDINGS_TESTS = 19
-FETCH_TESTS = 14
+FETCH_TESTS = 13
+BENCH_TESTS = 2
 CLI_TESTS = 6
 API_TESTS = 8
 
-.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-cli test-api test
+.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-bench test-cli test-api test
 
 install:
 	$(AGENTICA) install
@@ -38,9 +39,13 @@ endef
 test-bindings:
 	$(call agc_tests,bindings,$(BINDINGS_TESTS))
 
-# scripts/fetch.agc against a local server that redirects and serves ranges. Needs nothing fetched.
+# scripts/fetch.agc against a local server that redirects and serves a file. Needs nothing fetched.
 test-fetch:
 	$(call agc_tests,fetch,$(FETCH_TESTS))
+
+# bench/run_all.agc without a model: its help from another folder and its repo root. Needs nothing fetched.
+test-bench:
+	$(call agc_tests,bench,$(BENCH_TESTS))
 
 # The command line of server.agc. Needs `agentica scripts/fetch.agc llama`.
 test-cli:
@@ -50,4 +55,4 @@ test-cli:
 test-api:
 	$(call agc_tests,api,$(API_TESTS))
 
-test: test-bindings test-fetch test-cli test-api
+test: test-bindings test-fetch test-bench test-cli test-api

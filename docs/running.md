@@ -8,8 +8,8 @@ agentica install
 ```
 
 Run from the repo root. `scripts/fetch.agc` is a program in Agentica (`make fetch` runs it): the downloads follow
-redirects, are taken in 32 MiB pieces and are checked against their sha256 before they take their name, and each step
-skips what it has. It does not import the bindings, so it runs before the libraries that the manifest names exist.
+redirects (`HTTP.download` does not, so a HEAD request resolves them first), stream to a hidden `.agc-part` file and are
+checked against their sha256 before they take their name, and each step skips what it has. It does not import the bindings, so it runs before the libraries that the manifest names exist.
 
 - `llama [--variant vulkan]`: llama.cpp v1.0.0 (build b12359), Linux x86-64 CPU build (or the Vulkan build, see
   [GPU](#gpu)), sha256-checked, into `native/linux/`, because Agentica only loads `[native]` files from a `native/`
@@ -82,11 +82,11 @@ in `agentica_ms`. CI has no GPU: it runs the CPU build with `--gpu-layers 0`.
 ## Test
 
 ```sh
-make test    # or: make test-bindings test-fetch test-cli test-api
+make test    # or: make test-bindings test-fetch test-bench test-cli test-api
 agentica test tests/api_test.agc
 ```
 
-`make check`, `make fmt-check` and `make test` run the type check, the format check and the four test files (`make
+`make check`, `make fmt-check` and `make test` run the type check, the format check and the five test files (`make
 install` fetches the packages; `AGENTICA=` picks the binary). Each `make test-*` fails unless its file passes the count
 of tests in the `Makefile`, so a run that tests nothing fails. CI runs them on Linux with the pinned Agentica release,
 in [.github/workflows/ci.yml](../.github/workflows/ci.yml).
@@ -107,7 +107,11 @@ C one. Each must fail and name its struct or function. It needs the headers, the
 test-bindings` also checks the count of passed tests.
 
 `tests/fetch_test.agc` runs `scripts/fetch.agc` against a local server in the test that redirects (to a path, a relative
-path or in a loop) and serves `Range` pieces (a 34 MiB file): the file arrives with the right sha256 and no `.part`, a
-second run says "already fetched", a stale file is replaced, and a wrong sha256, a loop, a 404 (not retried) and a
-server that ignores `Range` exit 1 and leave no file. A release archive without the expected files keeps the libraries
-that were there. It needs no network; `make test-fetch` also checks the count of passed tests.
+path or in a loop) and serves a 4 MiB file: the file arrives with the right sha256, a second run says "already
+fetched", a stale file is replaced, and a wrong sha256, a loop and a 404 (not retried) exit 1 and leave no file (not even
+a `.agc-part`). A release archive without the expected files keeps the libraries that were there. It needs no network;
+`make test-fetch` also checks the count of passed tests.
+
+`tests/bench_test.agc` runs `bench/run_all.agc --help` from another folder and checks that the repo root is the parent of
+the folder of the program (the default of `--root`). It needs no model and no libraries; `make test-bench` checks the
+count.

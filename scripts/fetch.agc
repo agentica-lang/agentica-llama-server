@@ -9,7 +9,7 @@
 ## The release is the one of scripts/llama-release: the build tag and the sha256 of its Linux x86_64 archive, the
 ## sha256 of the archive of each other variant, then the sha256 of each header. The default model is the one of
 ## scripts/model. A download follows redirects (never from https to http), and nothing takes its final name before
-## its sha256 is checked. Each step skips what it already has. HF_ENDPOINT (as for the Hugging Face tools) replaces
+## its sha256 is checked (`HTTP.download` writes a hidden file and replaces the target after a clean end). Each step skips what it already has. HF_ENDPOINT (as for the Hugging Face tools) replaces
 ## https://huggingface.co, and LLAMA_RELEASES the folder of the release downloads on GitHub (both are for tests). It
 ## does not import the bindings, so it runs before the libraries that the manifest names exist.
 
@@ -49,7 +49,7 @@ def downgrade?(from: String, to: String) -> Bool
   from.downcase().start_with?("https:") and !to.downcase().start_with?("https:")
 end
 
-## Whether a failure may pass: a network or protocol failure, or a 5xx. A refusal (a 404, a bad redirect, no Range, a
+## Whether a failure may pass: a network or protocol failure, or a 5xx. A refusal (a 404, a bad redirect, a
 ## proxy that refuses) will not. A TLS failure is retried even when it is a permanent one (a bad certificate); the
 ## attempts bound it.
 def transient?(message: String) -> Bool
@@ -68,10 +68,7 @@ DOWNLOADS = "deps"
 TOOL_TIMEOUT_MS = 30_000
 ATTEMPTS = 3
 MAX_REDIRECTS = 5
-PIECE_TIMEOUT_MS = 600_000
 READ_TIMEOUT_MS = 60_000
-CHUNK_BYTES = 33_554_432
-WRITE_BYTES = 1_048_576
 
 # The messages of a failure that is retried. The TLS ones may be permanent (a certificate), which costs the attempts.
 TRANSIENT = [
@@ -320,11 +317,7 @@ def fetch_model(args: List[String]) -> Result[Void]
   endpoint = Regex.replace(System.env("HF_ENDPOINT").unwrap_or("https://huggingface.co"), /\/+$/, "").unwrap!
   url = "#{endpoint}/#{repo}/resolve/main/#{file}"
   puts("fetching #{url}")
-  partial = "#{out}.part"
-  try download_checked(url, partial, sha256)
-  # The old file, if any, failed the check above, and `rename` never replaces a file.
-  _ = Path.remove(out)
-  cleaning(Path.rename(partial, out), partial)
+  download_checked(url, out, sha256)
 end
 
 def already(text: String) -> Result[Void]
@@ -358,55 +351,42 @@ def cleaning[T](result: Result[T], path: String) -> Result[T]
   result
 end
 
-def verify(path: String, sha256: String) -> Result[Void]
-  digest = try File.sha256(path)
-  actual = OpenSSL.Digest.hexencode(digest)
-  return error("#{path}: sha256 is #{actual}, expected #{sha256}") if actual != sha256
-
+## A new file with the body of `url`, once its sha256 is right; a failure leaves the file that was there.
+def download_checked(url: String, path: String, sha256: String) -> Result[Void]
+  try attempt(url, path, sha256, ATTEMPTS)
   puts("#{path}: sha256 ok")
   ok()
 end
 
-## A new file with the body of `url`, once its sha256 is right; a failure leaves no file.
-def download_checked(url: String, path: String, sha256: String) -> Result[Void]
-  try cleaning(attempt(url, path, ATTEMPTS), path)
-  cleaning(verify(path, sha256), path)
-end
-
-def attempt(url: String, path: String, left: Int) -> Result[Void]
-  _ = Path.remove(path)
-  done = get(url, path)
+def attempt(url: String, path: String, sha256: String, left: Int) -> Result[Void]
+  done = get(url, path, sha256)
   return done if done.ok? or left <= 1 or !transient?(done.message)
 
   IO.warn("fetch: #{done.message}, trying again")
-  attempt(url, path, left - 1)
+  attempt(url, path, sha256, left - 1)
 end
 
-def get(url: String, path: String) -> Result[Void]
-  client = try HTTP.client(
-    HTTP.ClientOptions(timeout_ms: PIECE_TIMEOUT_MS, read_timeout_ms: READ_TIMEOUT_MS, max_body_bytes: CHUNK_BYTES),
-  )
-
-  done = copy(client, url, path)
+def get(url: String, path: String, sha256: String) -> Result[Void]
+  client = try HTTP.client(HTTP.ClientOptions(read_timeout_ms: READ_TIMEOUT_MS))
+  done = copy(client, url, path, sha256)
   HTTP.close_client(client)
   done
 end
 
-def copy(client: HTTP.Client, url: String, path: String) -> Result[Void]
+def copy(client: HTTP.Client, url: String, path: String, sha256: String) -> Result[Void]
   final = try resolve(client, url, MAX_REDIRECTS)
-  try File.write_text(path, "")
-  file = try File.open(path, "append")
-  done = copy_from(client, final, file, 0)
-  _ = File.close(file)
-  done
+  case HTTP.download(client, final, path, HTTP.DownloadOptions(sha256: some(sha256)))
+    ok(_) -> ok()
+    error(e) -> error(e.message)
+  end
 end
 
-## The URL after the redirects: a request for one byte follows them without downloading the file.
+## The URL after the redirects, which `HTTP.download` does not follow: a HEAD request follows them without a body.
 def resolve(client: HTTP.Client, url: String, hops: Int) -> Result[String]
   return error("#{url}: too many redirects") if hops < 0
 
-  response = try ranged(client, url, 0, 0)
-  return ok(url) if response.status == 200 or response.status == 206
+  response = try HTTP.request(client, "HEAD", url, "".bytes)
+  return ok(url) if response.status < 300
   return error("#{url}: HTTP #{response.status}") if ![301, 302, 303, 307, 308].include?(response.status)
 
   places = HTTP.header_values(response.headers, "location")
@@ -416,55 +396,4 @@ def resolve(client: HTTP.Client, url: String, hops: Int) -> Result[String]
   return error("#{url}: a redirect to #{target}, not https") if downgrade?(url, target)
 
   resolve(client, target, hops - 1)
-end
-
-## A file in pieces of CHUNK_BYTES, because the client keeps a body in memory (64 MiB at most) and `HTTP.download`
-## writes 256 MiB at most, less than a model.
-def copy_from(client: HTTP.Client, url: String, file: File.Handle, offset: Int) -> Result[Void]
-  response = try ranged(client, url, offset, offset + CHUNK_BYTES - 1)
-  if response.status == 200 and offset != 0
-    return error("#{url}: the server ignores Range (the whole file came at offset #{offset})")
-  end
-
-  try write_all(file, response.body)
-  return ok() if response.status == 200
-
-  return error("#{url}: HTTP #{response.status}") if response.status != 206
-
-  ends = try Regex.match(try content_range(response), /\/(\d+)$/)
-  total = try ends.groups[1].text.to_i
-  next_offset = offset + response.body.size
-  return ok() if next_offset >= total
-  return error("#{url}: an empty piece at #{offset}") if response.body.empty?
-
-  copy_from(client, url, file, next_offset)
-end
-
-def content_range(response: HTTP.Response) -> Result[String]
-  values = HTTP.header_values(response.headers, "content-range")
-  return error("a partial response with no Content-Range") if values.empty?
-
-  ok(values[0])
-end
-
-## A server that ignores Range answers 200 with the whole file, which the client refuses over CHUNK_BYTES.
-def ranged(client: HTTP.Client, url: String, first: Int, last: Int) -> Result[HTTP.Response]
-  headers = [HTTP.Header(name: "range", value: "bytes=#{first}-#{last}")]
-  response = HTTP.request(client, "GET", url, "".bytes, headers)
-  if !response.ok? and response.message.include?("max_body_bytes")
-    return error("#{url}: #{response.message} (the server ignores Range)")
-  end
-
-  response
-end
-
-## File.write_bytes takes 1 MiB at most.
-def write_all(file: File.Handle, body: Bytes) -> Result[Void]
-  start = 0
-  while start < body.size
-    try File.write_bytes(file, body.slice(start, [WRITE_BYTES, body.size - start].min.unwrap!()))
-    start = start + WRITE_BYTES
-  end
-
-  ok()
 end

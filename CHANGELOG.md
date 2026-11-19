@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** needs Agentica 0.35.0.
+- `scripts/fetch.agc` downloads with `HTTP.download` and its `sha256:` check, not 32 MiB `Range` pieces: a server that ignores `Range` is no longer a failure.
+- `bench/run_all.agc` takes the pid of a server from `Process.pid` and runs from any folder: the repo root is the parent of `bench/` (`--root` still names another).
+
 ## [0.2.0] - 2026-11-18
 
 ### Changed

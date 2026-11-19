@@ -32,18 +32,6 @@ Closed since the first version:
   A project-relative path anywhere in the tree would fix it.
 - **No chmod, and `Archive.extract_tar` drops the execute bit.** An extracted file is private (mode 0600), so
   `llama-server` of the release, which the benchmark runs, needs `chmod u+x`: `scripts/fetch.agc` runs the `chmod` tool.
-- **`HTTP.download` writes 256 MiB at most** (`max_total_bytes` above that is `http: max_total_bytes must be at most
-  268435456`), and the other calls keep the body in memory (64 MiB at most), so a 491 MB model is fetched in 32 MiB
-  `Range` pieces by hand (`scripts/fetch.agc`).
-  [agentica#1865](https://github.com/agentica-lang/agentica/issues/1865) plans to remove the 256 MiB cap from the streaming
-  calls; when it ships, the `Range` pieces can go.
-- **No pid of a started process.** `Process` has no `pid`, so `bench/run_all.agc`, which reads the memory and CPU time of
-  the server it started from `/proc/PID`, scans `/proc` for the child of `System.pid()` whose command line has the port.
-  `Process.pid(p)` would do.
-- **A program cannot learn its own path.** `bench/run_all.agc` finds `server.agc`, `deps/` and `native/linux` from the
-  current folder, or from `--root DIR` (a relative `--out`, `--llama-dir` or `--agentica` with a `/` is relative to the
-  root too); [agentica#1869](https://github.com/agentica-lang/agentica/issues/1869) (`System.program_name`) would let it
-  find them from its own folder.
 - **`Int` has no `min` or `max`.** `n_batch.min(512)` is `CHECK-UNKNOWN-METHOD: Int has no method "min"`.
   Agentica 0.23.0 added `n.clamp(lo, hi)` and `[a, b].min.unwrap!`, but a clamp needs a lower bound that the call
   sites do not have and the list form allocates on the engine's step path, so `src/llama_server/numbers.agc` keeps

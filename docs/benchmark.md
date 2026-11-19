@@ -55,6 +55,8 @@ them. The neighbour load is only recorded (it is not used to redo a run):
 agentica bench/run_all.agc --agentica /path/to/agentica --quick --max-load 1.5
 ```
 
+The runner works from any folder: the repo root is the parent of `bench/`, and `--root` names another one.
+
 The full mode (about 20 minutes per set) is the one that has 3 reps, `max_tokens` 64, more requests and a batched
 identity check; the full tables below come from it:
 
