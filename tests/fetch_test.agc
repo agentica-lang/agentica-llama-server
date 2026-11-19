@@ -1,10 +1,9 @@
-## scripts/fetch.agc against a local server that redirects and serves byte ranges (the way Hugging Face and its CDN
-## do): the download follows the redirect (absolute, relative or a loop), takes the file in pieces and checks its
-## sha256; a failed fetch leaves what was there. `agentica test` runs it from the repo root; it needs no network.
+## scripts/fetch.agc against a local server that redirects and then serves the whole file (the way Hugging Face and
+## its CDN do): the download follows the redirect (absolute, relative or a loop) and checks the sha256; a failed fetch
+## leaves what was there. `agentica test` runs it from the repo root; it needs no network.
 
 import Fetch from "../scripts/fetch"
 import HTTP from "std/http"
-import Regex from "std/regex"
 
 SCRIPT = "scripts/fetch.agc"
 TIMEOUT_MS = 120_000
@@ -12,8 +11,8 @@ TIMEOUT_MS = 120_000
 ALPHABET = Bytes.from_list((0...256).to_a).unwrap!()
 MEBIBYTE = Bytes.concat((0...4096).map do |_| ALPHABET end)
 
-## More than one piece of the download (32 MiB), and not a whole number of them.
-DATA = Bytes.concat((0...34).map do |_| MEBIBYTE end) + "tail of the file".bytes
+## Several MiB, so the download streams, and not a whole number of them.
+DATA = Bytes.concat((0...4).map do |_| MEBIBYTE end) + "tail of the file".bytes
 
 struct Ran
   code: Int
@@ -21,14 +20,20 @@ struct Ran
   stderr: String
 end
 
+## A mirror's port and its logs (see `mirror_answer`).
+struct Mirror
+  port: Int
+  requests: Channel[String]
+  faults: Channel[Int]
+end
+
 def serve(request: HTTP.Request) -> Result[HTTP.Response]
   case request.path
     "/Org/Repo/resolve/main/m.gguf" -> ok(redirect("/cdn/m.gguf"))
-    "/Org/Rel/resolve/main/m.gguf" -> ok(redirect("pieces/m.gguf"))
+    "/Org/Rel/resolve/main/m.gguf" -> ok(redirect("files/m.gguf"))
     "/Org/Loop/resolve/main/m.gguf" -> ok(redirect(request.path))
-    "/Org/Plain/resolve/main/m.gguf" -> ok(HTTP.Response(status: 200, headers: [], body: DATA))
-    "/cdn/m.gguf" -> ok(ranged(request))
-    "/Org/Rel/resolve/main/pieces/m.gguf" -> ok(ranged(request))
+    "/cdn/m.gguf" -> ok(whole(request))
+    "/Org/Rel/resolve/main/files/m.gguf" -> ok(whole(request))
     _ -> ok(HTTP.Response(status: 404, headers: [], body: "".bytes))
   end
 end
@@ -37,19 +42,45 @@ def redirect(location: String) -> HTTP.Response
   HTTP.Response(status: 302, headers: [HTTP.Header(name: "Location", value: location)], body: "".bytes)
 end
 
-def ranged(request: HTTP.Request) -> HTTP.Response
-  wanted = HTTP.header_values(request.headers, "range")
-  return HTTP.Response(status: 200, headers: [], body: DATA) if wanted.empty?
+def whole(request: HTTP.Request) -> HTTP.Response
+  body = DATA
+  if request.method == "HEAD"
+    body = "".bytes
+  end
 
-  found = Regex.match(wanted[0], /bytes=(\d+)-(\d+)/).unwrap!
-  first = found.groups[1].text.to_i.unwrap!()
-  last = [found.groups[2].text.to_i.unwrap!(), DATA.size - 1].min.unwrap!()
-  range = "bytes #{first}-#{last}/#{DATA.size}"
-  HTTP.Response(
-    status: 206,
-    headers: [HTTP.Header(name: "Content-Range", value: range)],
-    body: DATA.slice(first, last - first + 1),
-  )
+  HTTP.Response(status: 200, headers: [], body: body)
+end
+
+## A server that answers 405 to HEAD, as a CDN of GET-only links does, and logs each GET path in `requests`. The first
+## GET of `/Org/Flaky/...` answers 503 (`faults` holds one token for it), the others the file.
+def mirror_answer(requests: Channel[String], faults: Channel[Int], request: HTTP.Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 405, headers: [], body: "".bytes)) if request.method == "HEAD"
+
+  _ = Channel.send(requests, request.path, 0)
+  if request.path.start_with?("/Org/Flaky/") and Channel.recv(faults, 0).ok?
+    return ok(HTTP.Response(status: 503, headers: [], body: "busy".bytes))
+  end
+
+  ok(HTTP.Response(status: 200, headers: [], body: DATA))
+end
+
+def with_mirror(body: Fn[Mirror, Result[Void]]) -> Result[Void]
+  requests: Channel[String] = Channel.new(16)
+  faults: Channel[Int] = Channel.new(1)
+  _ = Channel.send(faults, 1, 0)
+  server = try HTTP.serve("127.0.0.1", 0, HTTP.app(->(request) { mirror_answer(requests, faults, request) }, 1024))
+  result = body.call(Mirror(port: HTTP.local_port(server), requests: requests, faults: faults))
+  HTTP.shutdown(server)
+  result
+end
+
+def count(requests: Channel[String]) -> Int
+  total = 0
+  while Channel.recv(requests, 0).ok?
+    total = total + 1
+  end
+
+  total
 end
 
 ## Runs `body` with a folder of its own, which is removed after it, whatever the result.
@@ -67,7 +98,7 @@ end
 def with_server(body: Fn[Int, Result[Void]]) -> Result[Void]
   server = try HTTP.serve("127.0.0.1", 0, HTTP.app(&serve, 1024))
   result = body.call(HTTP.local_port(server))
-  HTTP.close_server(server)
+  HTTP.shutdown(server)
   result
 end
 
@@ -109,7 +140,7 @@ def downloaded(repo: String) -> Result[Void]
   end
 end
 
-## A failed fetch: exit 1, the message in stderr and no file left (not even a `.part`).
+## A failed fetch: exit 1, the message in stderr and no file left (not even a hidden `.agc-part`).
 def refused(repo: String, sha256: String, message: String) -> Result[Void]
   with_server do |port|
     with_dir(repo) do |dir|
@@ -121,20 +152,42 @@ def refused(repo: String, sha256: String, message: String) -> Result[Void]
   end
 end
 
-def test_the_model_is_downloaded_through_the_redirect_in_pieces_and_checked() -> Result[Void] = downloaded("Repo")
+def test_the_model_is_downloaded_through_the_redirect_and_checked() -> Result[Void] = downloaded("Repo")
 
 def test_a_relative_location_is_followed() -> Result[Void] = downloaded("Rel")
 
 def test_a_wrong_sha256_fails_and_leaves_no_file() -> Result[Void]
-  refused("Repo", "0" * 64, "sha256 is " + OpenSSL.Digest.sha256_hexdigest(DATA))
+  refused("Repo", "0" * 64, "does not match the sha256 digest")
 end
 
 def test_a_redirect_loop_fails() -> Result[Void]
   refused("Loop", OpenSSL.Digest.sha256_hexdigest(DATA), "too many redirects")
 end
 
-def test_a_server_that_ignores_range_fails_with_a_hint() -> Result[Void]
-  refused("Plain", OpenSSL.Digest.sha256_hexdigest(DATA), "the server ignores Range")
+def test_a_get_that_fails_once_is_retried_when_the_head_is_refused() -> Result[Void]
+  with_mirror do |mirror|
+    with_dir("flaky") do |dir|
+      ran = try fetch(dir, mirror.port, "Org/Flaky", OpenSSL.Digest.sha256_hexdigest(DATA))
+      try Test.eq(ran.code, 0)
+      try Test.assert(ran.stderr.include?("HTTP 503"), ran.stderr)
+      try Test.assert(ran.stderr.include?("trying again"), ran.stderr)
+      try Test.eq(count(mirror.requests), 2)
+      Test.eq(try deps(dir), ["m.gguf"])
+    end
+  end
+end
+
+def test_a_wrong_sha256_is_not_retried() -> Result[Void]
+  with_mirror do |mirror|
+    with_dir("steady") do |dir|
+      ran = try fetch(dir, mirror.port, "Org/Steady", "0" * 64)
+      try Test.eq(ran.code, 1)
+      try Test.assert(ran.stderr.include?("does not match the sha256 digest"), ran.stderr)
+      try Test.assert(!ran.stderr.include?("trying again"), ran.stderr)
+      try Test.eq(count(mirror.requests), 1)
+      Test.eq(try deps(dir), [])
+    end
+  end
 end
 
 def test_a_stale_model_is_replaced() -> Result[Void]
@@ -143,6 +196,7 @@ def test_a_stale_model_is_replaced() -> Result[Void]
     with_dir("stale") do |dir|
       try Dir.mkdir(try Path.join([dir, "deps"]))
       try File.write_text(try Path.join([dir, "deps", "m.gguf"]), "truncated")
+      try File.write_text(try Path.join([dir, "deps", ".m.gguf.download.0a1b2c3d.agc-part"]), "killed")
       ran = try fetch(dir, port, "Org/Repo", sha256)
       try Test.eq(ran.code, 0)
       try Test.eq(try deps(dir), ["m.gguf"])
@@ -237,7 +291,7 @@ def fetch_llama_from_bad_archive(dir: String, args: List[String], stamp: String)
   try File.write_text(try Path.join([libraries, "libllama.so.1"]), "kept")
   server = try HTTP.serve("127.0.0.1", 0, HTTP.app(->(request) { archive_answer(bytes, request) }, 1024))
   ran = run_fetch(dir, ["llama"] + args, {"LLAMA_RELEASES": "http://127.0.0.1:#{HTTP.local_port(server)}"})
-  HTTP.close_server(server)
+  HTTP.shutdown(server)
   ran
 end
 

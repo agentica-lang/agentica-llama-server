@@ -2,8 +2,8 @@
 ## as a Markdown table.
 ##
 ## Each server starts under a systemd scope with a memory cap, is warmed up, then each concurrency runs `--reps`
-## times. The processes are the ones that this program started, and it stops exactly those. Run it from the repo root,
-## or give the root with `--root`:
+## times. The processes are the ones that this program started, and it stops exactly those. The repo root is the parent
+## of the folder of this program, wherever it runs from; `--root` names another one:
 ##
 ## agentica bench/run_all.agc [--quick] [--only NAME] [--threads N] [--concurrency 1,4,16] [--stream] [--gpu-layers N]
 ##                           [--llama-dir DIR] [--out FILE] ...
@@ -27,6 +27,15 @@ def main() -> Void
   end
 
   IO.warn("took #{(Time.monotonic_ms() - started) / 1000} s")
+end
+
+## The repo root of the path of this program: `/repo/bench/run_all.agc` is `/repo`. A program that is not in a folder
+## named `bench` has no root to find.
+def root_of(program: String) -> Result[String]
+  folder = dirname(program)
+  return error("#{program} is not in a bench folder: pass --root") if folder.split("/").last != "bench"
+
+  ok(dirname(folder))
 end
 
 private
@@ -144,7 +153,10 @@ def parse(args: List[String]) -> Result[OP.Parsed]
       Opt(name: "stream", kind: Kind.Flag, help: "every request says \"stream\": true; adds time to first token"),
       Opt(name: "port", kind: Kind.Int, default: "8123"),
       Opt(name: "out", default: "bench/results/latest.json", help: "the JSON of the runs, relative to --root"),
-      Opt(name: "root", default: ".", help: "the repo root: server.agc, deps/ and native/linux are looked up there"),
+      Opt(
+        name: "root",
+        help: "the repo root: server.agc, deps/ and native/linux are looked up there (default: the parent of bench/)",
+      ),
     ],
   )
 
@@ -154,7 +166,7 @@ end
 ## An explicit value always wins; only an omitted one takes the default of its mode.
 def options_of(p: OP.Parsed) -> Result[Options]
   quick = OP.flag(p, "quick")
-  root = try Path.real(OP.string(p, "root"))
+  root = try repo_root(p)
   llama_dir = try in_root(root, OP.string(p, "llama-dir"))
   out = try in_root(root, OP.string(p, "out"))
   agentica = OP.string(p, "agentica")
@@ -187,6 +199,25 @@ def options_of(p: OP.Parsed) -> Result[Options]
       out: out,
     ),
   )
+end
+
+## `--root`, or the parent of the folder of this program (`bench/run_all.agc`).
+def repo_root(p: OP.Parsed) -> Result[String]
+  case OP.optional_string(p, "root")
+    some(dir) -> Path.real(dir)
+    none -> root_of(try Path.real(System.program_name()))
+  end
+end
+
+## The folder of a path: `/a/b` is `/a`, `/a` is `/` and `a` is `.`.
+def dirname(path: String) -> String
+  parts = path.split("/")
+  head = parts.take(parts.size - 1).join("/")
+  return head if !head.empty?
+
+  return "/" if path.start_with?("/")
+
+  "."
 end
 
 ## An absolute path as it is, a relative one under the root.
@@ -332,41 +363,16 @@ def start(options: Options, name: String, port: Int, folder: String) -> Result[S
   )
 
   # `systemd-run --scope` execs the command: the child of this program is the server itself.
-  pid = try find_pid(process, name, port, log)
+  found = Process.pid(process)
+  return error("#{name} exited at its start, see #{log}") if !found.ok?
+
+  pid = found.unwrap!
   extra: Map[String, JSON.Value] = {}
   if name == "llama-server"
     extra = {"cache_prompt": JSON.from(false)}
   end
 
   ok(Server(name: name, port: port, url: "http://127.0.0.1:#{port}", extra: extra, process: process, pid: pid))
-end
-
-## The child of this program that was started with `--port PORT` (Agentica has no `Process.pid`).
-def find_pid(process: Process, name: String, port: Int, log: String) -> Result[Int]
-  nul = String.from_code(0)
-  needle = "--port#{nul}#{port}#{nul}"
-  for _ in 0...100
-    for entry in try Dir.list("/proc")
-      next if !Regex.match?(entry, /^\d+$/)
-
-      stat = File.read_text("/proc/#{entry}/stat")
-      cmdline = File.read_text("/proc/#{entry}/cmdline")
-      if stat.ok? and cmdline.ok? and parent_of(stat.unwrap!) == System.pid() and cmdline.unwrap!.include?(needle)
-        return ok(entry.to_i!())
-      end
-    end
-
-    return error("#{name} exited at its start, see #{log}") if Process.wait(process, 1).ok?
-
-    Task.sleep(50)
-  end
-
-  error("the process of #{name} on port #{port} was not found, see #{log}")
-end
-
-def parent_of(stat: String) -> Int
-  fields = after_name(stat)
-  fields[1].to_i!()
 end
 
 ## The fields of a /proc/PID/stat line after the command name: state, ppid, ... (utime and stime are 11 and 12).
