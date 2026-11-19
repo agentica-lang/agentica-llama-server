@@ -9,9 +9,11 @@
 ## The release is the one of scripts/llama-release: the build tag and the sha256 of its Linux x86_64 archive, the
 ## sha256 of the archive of each other variant, then the sha256 of each header. The default model is the one of
 ## scripts/model. A download follows redirects (never from https to http), and nothing takes its final name before
-## its sha256 is checked (`HTTP.download` writes a hidden file and replaces the target after a clean end). Each step skips what it already has. HF_ENDPOINT (as for the Hugging Face tools) replaces
-## https://huggingface.co, and LLAMA_RELEASES the folder of the release downloads on GitHub (both are for tests). It
-## does not import the bindings, so it runs before the libraries that the manifest names exist.
+## its sha256 is checked: the body goes to a hidden `.agc-part` file (`HTTP.download`), then to a scratch name beside
+## the target, and replaces the target only when its status and its sha256 are right. A fetch that was killed can leave
+## one of those files; the next one removes them. Each step skips what it already has. HF_ENDPOINT (as for the Hugging
+## Face tools) replaces https://huggingface.co, and LLAMA_RELEASES the folder of the release downloads on GitHub (both
+## are for tests). It does not import the bindings, so it runs before the libraries that the manifest names exist.
 
 import Archive from "std/archive"
 import HTTP from "std/http"
@@ -69,6 +71,10 @@ TOOL_TIMEOUT_MS = 30_000
 ATTEMPTS = 3
 MAX_REDIRECTS = 5
 READ_TIMEOUT_MS = 60_000
+DOWNLOAD_TIMEOUT_MS = 7_200_000
+MAX_DOWNLOAD_BYTES = 2_147_483_648
+# `HTTP.download` keeps at most this many characters of the name of the file in the name of its hidden file.
+PART_NAME_CHARS = 32
 
 # The messages of a failure that is retried. The TLS ones may be permanent (a certificate), which costs the attempts.
 TRANSIENT = [
@@ -351,43 +357,70 @@ def cleaning[T](result: Result[T], path: String) -> Result[T]
   result
 end
 
-## A new file with the body of `url`, once its sha256 is right; a failure leaves the file that was there.
+## A new file with the body of `url`, once its status and sha256 are right; a failure leaves the file that was there.
 def download_checked(url: String, path: String, sha256: String) -> Result[Void]
-  try attempt(url, path, sha256, ATTEMPTS)
+  scratch = "#{path}.download"
+  remove_leftovers(scratch)
+  done = attempt(url, scratch, sha256, ATTEMPTS)
+  if done.ok?
+    done = Path.replace(scratch, path)
+  end
+
+  _ = Path.remove(scratch)
+  try done
   puts("#{path}: sha256 ok")
   ok()
 end
 
-def attempt(url: String, path: String, sha256: String, left: Int) -> Result[Void]
-  done = get(url, path, sha256)
+## The scratch file and the hidden files of a download of it that was killed (`.NAME.HEX.agc-part`).
+def remove_leftovers(scratch: String) -> Void
+  _ = Path.remove(scratch)
+  parts = scratch.split("/")
+  name = parts.last
+  folder = parts.take(parts.size - 1).join("/")
+  prefix = ".#{name.slice(0, [name.length, PART_NAME_CHARS].min.unwrap!())}."
+  entries: List[String] = Dir.list(folder).unwrap_or([])
+  for entry in entries
+    if entry.start_with?(prefix) and entry.end_with?(".agc-part")
+      _ = Path.remove("#{folder}/#{entry}")
+    end
+  end
+end
+
+def attempt(url: String, scratch: String, sha256: String, left: Int) -> Result[Void]
+  done = get(url, scratch, sha256)
   return done if done.ok? or left <= 1 or !transient?(done.message)
 
   IO.warn("fetch: #{done.message}, trying again")
-  attempt(url, path, sha256, left - 1)
+  attempt(url, scratch, sha256, left - 1)
 end
 
-def get(url: String, path: String, sha256: String) -> Result[Void]
+def get(url: String, scratch: String, sha256: String) -> Result[Void]
   client = try HTTP.client(HTTP.ClientOptions(read_timeout_ms: READ_TIMEOUT_MS))
-  done = copy(client, url, path, sha256)
+  done = copy(client, url, scratch, sha256)
   HTTP.close_client(client)
   done
 end
 
-def copy(client: HTTP.Client, url: String, path: String, sha256: String) -> Result[Void]
+## `HTTP.download` writes the body of a 404 or a 503 as it does any other, so the status is checked before the digest:
+## the digest of an error page would hide the failure and a 5xx would not be retried.
+def copy(client: HTTP.Client, url: String, scratch: String, sha256: String) -> Result[Void]
   final = try resolve(client, url, MAX_REDIRECTS)
-  case HTTP.download(client, final, path, HTTP.DownloadOptions(sha256: some(sha256)))
-    ok(_) -> ok()
-    error(e) -> error(e.message)
-  end
+  options = HTTP.DownloadOptions(timeout_ms: some(DOWNLOAD_TIMEOUT_MS), max_total_bytes: some(MAX_DOWNLOAD_BYTES))
+  saved = try HTTP.download(client, final, scratch, options)
+  return error("#{final}: HTTP #{saved.status}") if saved.status >= 300
+  return error("#{final}: the body does not match the sha256 digest") if !has_sha256?(scratch, sha256)
+
+  ok()
 end
 
-## The URL after the redirects, which `HTTP.download` does not follow: a HEAD request follows them without a body.
+## The URL after the redirects, which `HTTP.download` does not follow: a HEAD request follows them without a body. Any
+## other answer, a 405 or a 403 as well, ends it: the download then says what the GET gets.
 def resolve(client: HTTP.Client, url: String, hops: Int) -> Result[String]
   return error("#{url}: too many redirects") if hops < 0
 
   response = try HTTP.request(client, "HEAD", url, "".bytes)
-  return ok(url) if response.status < 300
-  return error("#{url}: HTTP #{response.status}") if ![301, 302, 303, 307, 308].include?(response.status)
+  return ok(url) if ![301, 302, 303, 307, 308].include?(response.status)
 
   places = HTTP.header_values(response.headers, "location")
   return error("#{url}: a redirect with no Location") if places.empty?

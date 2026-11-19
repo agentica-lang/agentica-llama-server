@@ -29,8 +29,14 @@ def main() -> Void
   IO.warn("took #{(Time.monotonic_ms() - started) / 1000} s")
 end
 
-## The repo root of the path of this program: `/repo/bench/run_all.agc` is `/repo`.
-def root_of(program: String) -> String = Regex.replace(program, /\/[^\/]+\/[^\/]+$/, "").unwrap!
+## The repo root of the path of this program: `/repo/bench/run_all.agc` is `/repo`. A program that is not in a folder
+## named `bench` has no root to find.
+def root_of(program: String) -> Result[String]
+  folder = dirname(program)
+  return error("#{program} is not in a bench folder: pass --root") if folder.split("/").last != "bench"
+
+  ok(dirname(folder))
+end
 
 private
 
@@ -199,8 +205,19 @@ end
 def repo_root(p: OP.Parsed) -> Result[String]
   case OP.optional_string(p, "root")
     some(dir) -> Path.real(dir)
-    none -> ok(root_of(try Path.real(System.program_name())))
+    none -> root_of(try Path.real(System.program_name()))
   end
+end
+
+## The folder of a path: `/a/b` is `/a`, `/a` is `/` and `a` is `.`.
+def dirname(path: String) -> String
+  parts = path.split("/")
+  head = parts.take(parts.size - 1).join("/")
+  return head if !head.empty?
+
+  return "/" if path.start_with?("/")
+
+  "."
 end
 
 ## An absolute path as it is, a relative one under the root.
@@ -346,7 +363,10 @@ def start(options: Options, name: String, port: Int, folder: String) -> Result[S
   )
 
   # `systemd-run --scope` execs the command: the child of this program is the server itself.
-  pid = try Process.pid(process)
+  found = Process.pid(process)
+  return error("#{name} exited at its start, see #{log}") if !found.ok?
+
+  pid = found.unwrap!
   extra: Map[String, JSON.Value] = {}
   if name == "llama-server"
     extra = {"cache_prompt": JSON.from(false)}

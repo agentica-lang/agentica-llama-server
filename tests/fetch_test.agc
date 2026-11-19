@@ -1,5 +1,6 @@
 ## scripts/fetch.agc against a local server that redirects and then serves the whole file (the way Hugging Face and
-## its CDN do): the download follows the redirect (absolute, relative or a loop) and checks the sha256; a failed fetch leaves what was there. `agentica test` runs it from the repo root; it needs no network.
+## its CDN do): the download follows the redirect (absolute, relative or a loop) and checks the sha256; a failed fetch
+## leaves what was there. `agentica test` runs it from the repo root; it needs no network.
 
 import Fetch from "../scripts/fetch"
 import HTTP from "std/http"
@@ -17,6 +18,13 @@ struct Ran
   code: Int
   stdout: String
   stderr: String
+end
+
+## A mirror's port and its logs (see `mirror_answer`).
+struct Mirror
+  port: Int
+  requests: Channel[String]
+  faults: Channel[Int]
 end
 
 def serve(request: HTTP.Request) -> Result[HTTP.Response]
@@ -41,6 +49,38 @@ def whole(request: HTTP.Request) -> HTTP.Response
   end
 
   HTTP.Response(status: 200, headers: [], body: body)
+end
+
+## A server that answers 405 to HEAD, as a CDN of GET-only links does, and logs each GET path in `requests`. The first
+## GET of `/Org/Flaky/...` answers 503 (`faults` holds one token for it), the others the file.
+def mirror_answer(requests: Channel[String], faults: Channel[Int], request: HTTP.Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 405, headers: [], body: "".bytes)) if request.method == "HEAD"
+
+  _ = Channel.send(requests, request.path, 0)
+  if request.path.start_with?("/Org/Flaky/") and Channel.recv(faults, 0).ok?
+    return ok(HTTP.Response(status: 503, headers: [], body: "busy".bytes))
+  end
+
+  ok(HTTP.Response(status: 200, headers: [], body: DATA))
+end
+
+def with_mirror(body: Fn[Mirror, Result[Void]]) -> Result[Void]
+  requests: Channel[String] = Channel.new(16)
+  faults: Channel[Int] = Channel.new(1)
+  _ = Channel.send(faults, 1, 0)
+  server = try HTTP.serve("127.0.0.1", 0, HTTP.app(->(request) { mirror_answer(requests, faults, request) }, 1024))
+  result = body.call(Mirror(port: HTTP.local_port(server), requests: requests, faults: faults))
+  HTTP.shutdown(server)
+  result
+end
+
+def count(requests: Channel[String]) -> Int
+  total = 0
+  while Channel.recv(requests, 0).ok?
+    total = total + 1
+  end
+
+  total
 end
 
 ## Runs `body` with a folder of its own, which is removed after it, whatever the result.
@@ -124,12 +164,39 @@ def test_a_redirect_loop_fails() -> Result[Void]
   refused("Loop", OpenSSL.Digest.sha256_hexdigest(DATA), "too many redirects")
 end
 
+def test_a_get_that_fails_once_is_retried_when_the_head_is_refused() -> Result[Void]
+  with_mirror do |mirror|
+    with_dir("flaky") do |dir|
+      ran = try fetch(dir, mirror.port, "Org/Flaky", OpenSSL.Digest.sha256_hexdigest(DATA))
+      try Test.eq(ran.code, 0)
+      try Test.assert(ran.stderr.include?("HTTP 503"), ran.stderr)
+      try Test.assert(ran.stderr.include?("trying again"), ran.stderr)
+      try Test.eq(count(mirror.requests), 2)
+      Test.eq(try deps(dir), ["m.gguf"])
+    end
+  end
+end
+
+def test_a_wrong_sha256_is_not_retried() -> Result[Void]
+  with_mirror do |mirror|
+    with_dir("steady") do |dir|
+      ran = try fetch(dir, mirror.port, "Org/Steady", "0" * 64)
+      try Test.eq(ran.code, 1)
+      try Test.assert(ran.stderr.include?("does not match the sha256 digest"), ran.stderr)
+      try Test.assert(!ran.stderr.include?("trying again"), ran.stderr)
+      try Test.eq(count(mirror.requests), 1)
+      Test.eq(try deps(dir), [])
+    end
+  end
+end
+
 def test_a_stale_model_is_replaced() -> Result[Void]
   sha256 = OpenSSL.Digest.sha256_hexdigest(DATA)
   with_server do |port|
     with_dir("stale") do |dir|
       try Dir.mkdir(try Path.join([dir, "deps"]))
       try File.write_text(try Path.join([dir, "deps", "m.gguf"]), "truncated")
+      try File.write_text(try Path.join([dir, "deps", ".m.gguf.download.0a1b2c3d.agc-part"]), "killed")
       ran = try fetch(dir, port, "Org/Repo", sha256)
       try Test.eq(ran.code, 0)
       try Test.eq(try deps(dir), ["m.gguf"])

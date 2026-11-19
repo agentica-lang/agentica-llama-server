@@ -9,7 +9,10 @@ agentica install
 
 Run from the repo root. `scripts/fetch.agc` is a program in Agentica (`make fetch` runs it): the downloads follow
 redirects (`HTTP.download` does not, so a HEAD request resolves them first), stream to a hidden `.agc-part` file and are
-checked against their sha256 before they take their name, and each step skips what it has. It does not import the bindings, so it runs before the libraries that the manifest names exist.
+checked against their status and their sha256 before they take their name, and each step skips what it has. A 5xx and a
+cut connection are tried again, a 404 and a wrong sha256 are not. A fetch that was killed can leave a hidden
+`.NAME.download.HEX.agc-part` file in the folder of the target (and a `NAME.download`); the next fetch removes them. It
+does not import the bindings, so it runs before the libraries that the manifest names exist.
 
 - `llama [--variant vulkan]`: llama.cpp v1.0.0 (build b12359), Linux x86-64 CPU build (or the Vulkan build, see
   [GPU](#gpu)), sha256-checked, into `native/linux/`, because Agentica only loads `[native]` files from a `native/`
@@ -108,10 +111,11 @@ test-bindings` also checks the count of passed tests.
 
 `tests/fetch_test.agc` runs `scripts/fetch.agc` against a local server in the test that redirects (to a path, a relative
 path or in a loop) and serves a 4 MiB file: the file arrives with the right sha256, a second run says "already
-fetched", a stale file is replaced, and a wrong sha256, a loop and a 404 (not retried) exit 1 and leave no file (not even
-a `.agc-part`). A release archive without the expected files keeps the libraries that were there. It needs no network;
-`make test-fetch` also checks the count of passed tests.
+fetched", a stale file is replaced (and the leftovers of a killed fetch removed), a GET that answers 503 once is tried
+again (the server refuses HEAD with a 405), and a wrong sha256 (not retried), a loop and a 404 (not retried) exit 1 and
+leave no file (not even a `.agc-part`). A release archive without the expected files keeps the libraries that were
+there. It needs no network; `make test-fetch` also checks the count of passed tests.
 
-`tests/bench_test.agc` runs `bench/run_all.agc --help` from another folder and checks that the repo root is the parent of
-the folder of the program (the default of `--root`). It needs no model and no libraries; `make test-bench` checks the
-count.
+`tests/bench_test.agc` runs `bench/run_all.agc --help` from another folder and checks that the repo root is the parent
+of the folder of the program (the default of `--root`) and that a program outside a `bench` folder has none. It needs no
+model and no libraries; `make test-bench` checks the count.
