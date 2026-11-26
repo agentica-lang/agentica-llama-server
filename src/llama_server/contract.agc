@@ -20,6 +20,13 @@ struct GenRequest
   reply: Channel[GenResult]
 end
 
+## Whose fault a refusal is: the request's (a 400) or the engine's (a 500).
+enum Fault
+  None
+  Client
+  Internal
+end
+
 ## The whole answer, or in a stream the text of one piece (`finish_reason` is "" until the last one, whose `text` is
 ## empty). `completion_tokens` counts the tokens sampled so far in a piece.
 struct GenResult
@@ -28,6 +35,7 @@ struct GenResult
   completion_tokens: Int
   finish_reason: String
   failure: String
+  fault: Fault = Fault.None
 end
 
 ## What the routes hold of a running engine. `n_ctx` bounds how many pieces a stream can hold, so the engine never
@@ -40,6 +48,6 @@ struct Handle
 end
 
 ## The answer of a request that cannot run.
-def refusal(message: String) -> GenResult
-  GenResult(text: "", prompt_tokens: 0, completion_tokens: 0, finish_reason: "error", failure: message)
+def refusal(message: String, fault: Fault) -> GenResult
+  GenResult(text: "", prompt_tokens: 0, completion_tokens: 0, finish_reason: "error", failure: message, fault: fault)
 end

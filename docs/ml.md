@@ -24,8 +24,16 @@ and its answer together, at most the model's). `--help` lists them.
 - **Streaming and usage** work as in `server.agc`: a piece per token that completes a character, then the finish
   reason, the usage chunk when `stream_options.include_usage` is on, and `[DONE]`. A client that leaves ends its
   sequence at the next token.
+- **A request that waits can still be dropped.** A request whose reply channel is closed is skipped before its first
+  step and then every 4 tokens, and the route closes the channel when its wait times out (600 s). Bond gives a handler no
+  signal that its client left, so a plain request whose client leaves keeps its place until that timeout; a stream
+  notices at its next token.
+- **Errors:** a prompt that does not fit, a bad `temperature` (negative, or a positive one too small to use) or a role
+  that the chat template does not know is a `400`; a failure of a step is a `500`. If the engine task crashes or cannot
+  start, the process ends.
 - **Sampling:** `temperature` 0 is greedy (the pick runs in the graph); above 0 the token is drawn on the host among the
-  256 largest logits (ml's `Sample`), the same ids for the same `seed`. `top_p` and `top_k` are not read from the
+  256 largest logits (ml's `Sample`), the same ids for the same `seed`. A request with no `seed` has seed 0, so it is deterministic too: the same prompt and
+  `temperature` give the same text. `top_p` and `top_k` are not read from the
   request. `finish_reason` is `stop` at `<|im_end|>` or `<|endoftext|>` and `length` at `max_tokens` or the context.
 - **Qwen3 thinks** unless the model's template says otherwise: the chat template is applied with thinking on, so the
   answer starts with a `<think>` block.
@@ -35,7 +43,8 @@ and its answer together, at most the model's). `--help` lists them.
 `reference` is ml's pure Agentica backend: correct and very slow, the one the tests use. `ggml` and `vulkan` need ml's
 ggml native module, which is optional: without it every run prints `warning: native module ggml not built` (and one
 for torch, which this server never uses) and `--backend ggml` stops with "the backend ... is not available". Building the
-module needs ggml's static libraries; see `tensor/README.md` of ml ("The ggml backend").
+module needs ggml's static libraries; see `tensor/README.md` of ml ("The ggml backend"). **CI runs only the reference
+backend**: a run on `ggml` or `vulkan` is not verified by any test here.
 
 ## The two engines in one process
 

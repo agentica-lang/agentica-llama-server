@@ -6,10 +6,11 @@ BINDINGS_TESTS = 19
 FETCH_TESTS = 15
 BENCH_TESTS = 3
 CLI_TESTS = 6
-API_TESTS = 8
-ML_API_TESTS = 10
+API_TESTS = 9
+ML_API_TESTS = 17
+ML_ENGINE_TESTS = 1
 
-.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-bench test-cli test-api test-api-ml test
+.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-bench test-cli test-api test-api-ml test-ml-engine test
 
 install:
 	$(AGENTICA) install
@@ -23,16 +24,16 @@ check:
 	$(AGENTICA) check
 
 fmt-check:
-	$(AGENTICA) fmt --check server.agc smoke.agc src scripts tests bench
+	$(AGENTICA) fmt --check server.agc server_ml.agc smoke.agc src scripts tests bench
 
 # The structs and functions of llama.agc against the llama.cpp headers, and their sizes against the C compiler's.
 # Needs `agentica scripts/fetch.agc headers` and `llama`.
 check-bindings:
 	$(AGENTICA) scripts/check_bindings.agc
 
-# $(call agc_tests,NAME,COUNT): `agentica test tests/NAME_test.agc`, which must pass exactly COUNT tests.
+# $(call agc_tests,NAME,COUNT,FLAGS): `agentica test FLAGS tests/NAME_test.agc`, which must pass exactly COUNT tests.
 define agc_tests
-@$(AGENTICA) test tests/$(1)_test.agc > tests/$(1).log; status=$$?; cat tests/$(1).log; \
+@$(AGENTICA) test $(3) tests/$(1)_test.agc > tests/$(1).log; status=$$?; cat tests/$(1).log; \
 test $$status -eq 0 && grep -q "^$(2) passed, 0 failed, 0 skipped, 0 not executed, 0 file errors" tests/$(1).log
 endef
 
@@ -60,4 +61,8 @@ test-api:
 test-api-ml:
 	$(call agc_tests,api_ml,$(ML_API_TESTS))
 
-test: test-bindings test-fetch test-bench test-cli test-api test-api-ml
+# ml_engine.agc in this process, on the same tiny model: it decodes in the test, so it has no step limit.
+test-ml-engine:
+	$(call agc_tests,ml_engine,$(ML_ENGINE_TESTS),--max-steps unlimited)
+
+test: test-bindings test-fetch test-bench test-cli test-api test-api-ml test-ml-engine

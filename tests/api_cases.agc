@@ -4,50 +4,6 @@
 import HTTP from "std/http"
 
 TIMEOUT_MS = 120_000
-
-## Every check, as test cases for the server on `port`.
-def tests(port: Int) -> List[Test.Case]
-  [
-    Test.test("health") do check_health(port) end,
-    Test.test("chat is OpenAI shaped and greedy is repeatable") do check_chat(port) end,
-    Test.test("seeded sampling is repeatable") do check_seeded(port) end,
-    Test.test("stream chunks add up to the greedy answer") do check_stream_chunks(port) end,
-    Test.test("stream keeps multibyte characters whole") do check_multibyte(port) end,
-    Test.test("stream of a refused request is 400") do check_refused_stream(port) end,
-    Test.test("clients that leave free their slots") do check_leavers(port) end,
-    Test.test("bad requests are 400") do check_bad_requests(port) end,
-  ]
-end
-
-## The status of a request whose only message has `role`.
-def role_status(port: Int, role: String) -> Result[Int]
-  status_of(post(port, [Message(role: role, content: "hi")], {}))
-end
-
-def free_port() -> Result[Int]
-  listener = try TCP.listen("127.0.0.1", 0)
-  port = TCP.local_port(listener)
-  TCP.close_listener(listener)
-  ok(port)
-end
-
-## Waits for `/health`, and fails when the server exits first.
-def wait_ready(server: Process, port: Int, log: String) -> Result[Void]
-  for _ in 0...START_ATTEMPTS
-    exited = Process.wait(server, 1)
-    return error("the server exited with #{exited.unwrap!} (see #{log})") if exited.ok?
-
-    health = HTTP.get_response("http://127.0.0.1:#{port}/health", HTTP.ClientOptions(timeout_ms: 2000))
-    return ok() if health.ok? and health.unwrap!.status == 200
-
-    Task.sleep(300)
-  end
-
-  error("the server did not start (see #{log})")
-end
-
-private
-
 START_ATTEMPTS = 200
 
 MESSAGES = [
@@ -101,6 +57,48 @@ struct Reply
 end
 
 # --- HTTP
+
+## Every check, as test cases for the server on `port`.
+def tests(port: Int) -> List[Test.Case]
+  [
+    Test.test("health") do check_health(port) end,
+    Test.test("chat is OpenAI shaped and greedy is repeatable") do check_chat(port) end,
+    Test.test("seeded sampling is repeatable") do check_seeded(port) end,
+    Test.test("stream chunks add up to the greedy answer") do check_stream_chunks(port) end,
+    Test.test("a multibyte prompt streams the answer of the whole request") do check_multibyte(port) end,
+    Test.test("max_tokens bounds the answer") do check_max_tokens(port) end,
+    Test.test("stream of a refused request is 400") do check_refused_stream(port) end,
+    Test.test("clients that leave free their slots") do check_leavers(port) end,
+    Test.test("bad requests are 400") do check_bad_requests(port) end,
+  ]
+end
+
+## The status of a request whose only message has `role`.
+def role_status(port: Int, role: String) -> Result[Int]
+  status_of(post(port, [Message(role: role, content: "hi")], {}))
+end
+
+def free_port() -> Result[Int]
+  listener = try TCP.listen("127.0.0.1", 0)
+  port = TCP.local_port(listener)
+  TCP.close_listener(listener)
+  ok(port)
+end
+
+## Waits for `/health`, and fails when the server exits first.
+def wait_ready(server: Process, port: Int, log: String) -> Result[Void]
+  for _ in 0...START_ATTEMPTS
+    exited = Process.wait(server, 1)
+    return error("the server exited with #{exited.unwrap!} (see #{log})") if exited.ok?
+
+    health = HTTP.get_response("http://127.0.0.1:#{port}/health", HTTP.ClientOptions(timeout_ms: 2000))
+    return ok() if health.ok? and health.unwrap!.status == 200
+
+    Task.sleep(300)
+  end
+
+  error("the server did not start (see #{log})")
+end
 
 def send(method: String, url: String, body: String, options: HTTP.ClientOptions) -> Result[HTTP.Response]
   return HTTP.get_response(url, options) if method == "GET"
@@ -237,7 +235,8 @@ def check_stream_chunks(port: Int) -> Result[Void]
 end
 
 ## Emoji often span several tokens: every piece must still be valid UTF-8 (the body decodes and the pieces have no
-## replacement character) and the pieces must add up to the non-streaming text.
+## replacement character) and the pieces must add up to the non-streaming text. An engine whose answers are all ASCII
+## (the tiny model of `tiny_qwen3.agc`) cannot split a character: `api_ml_test.agc` checks that in `whole_text`.
 def check_multibyte(port: Int) -> Result[Void]
   prompt = [Message(role: "user", content: "Write 3 lines using rare emoji such as 🫠 🪿.")]
   whole = try post(port, prompt, greedy(60))
@@ -248,6 +247,12 @@ def check_multibyte(port: Int) -> Result[Void]
   text = pieces.join("")
   try Test.assert(!text.include?("�"), text)
   Test.eq(text, (try JSON.decode(whole.body, Completion)).choices[0].message.content)
+end
+
+def check_max_tokens(port: Int) -> Result[Void]
+  done = try chat(port, greedy(3))
+  try Test.eq(done.choices[0].finish_reason, "length")
+  Test.eq(done.usage.completion_tokens, 3)
 end
 
 def long_prompt() -> List[Message] = [Message(role: "user", content: "word " * 3000)]
@@ -317,6 +322,7 @@ def check_bad_requests(port: Int) -> Result[Void]
   try Test.eq(try status_of(post(port, [], {})), 400)
   try Test.eq(try status_of(post_raw(port, "{\"nope\": 1}")), 400)
   try Test.eq(try status_of(post(port, long_prompt(), {})), 400)
+  try Test.eq(try status_of(post(port, MESSAGES, {"temperature": JSON.from(-0.5)})), 400)
   for bad in [0, -1, -5]
     extra = {"max_tokens": JSON.from(bad)}
     try Test.eq(try status_of(post(port, MESSAGES, extra)), 400)

@@ -42,7 +42,7 @@ end
 def serve(options: MlCli.Options) -> Result[Void]
   loaded = try MlEngine.load(options.model, backend_of(options.backend), weights_of(options.weights), options.n_ctx)
   requests: Channel[Contract.GenRequest] = Channel.new(REQUEST_QUEUE)
-  engine = Task.spawn(&run_engine, EngineJob(loaded: loaded, requests: requests))
+  engine = Task.spawn_link(&run_engine, EngineJob(loaded: loaded, requests: requests))
   api = Api.new_api(MlEngine.handle(loaded, requests, options.name))
   server = try Bond.start_with(
     Api.app(api),
@@ -55,9 +55,18 @@ def serve(options: MlCli.Options) -> Result[Void]
   IO.flush()
   try Bond.wait(server)
   Task.await(engine)
+  ok()
 end
 
-def run_engine(job: EngineJob) -> Result[Void] = MlEngine.run(job.loaded, job.requests)
+# The engine ends only with an error (it returns when it cannot start): the process ends with it, not hangs.
+def run_engine(job: EngineJob) -> Void
+  case MlEngine.run(job.loaded, job.requests)
+    ok(_) -> nil
+    error(e) ->
+      IO.warn("engine: #{e.message}")
+      System.exit(1)
+  end
+end
 
 def backend_of(name: String) -> Tensor.Backend
   case name

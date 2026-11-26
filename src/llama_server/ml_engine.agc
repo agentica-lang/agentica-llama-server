@@ -28,6 +28,12 @@ struct Loaded
   context: Int
 end
 
+## The tokens that were sampled and are not text yet, and the text that they complete.
+struct Piece
+  text: String
+  held: List[Int]
+end
+
 ## Loads the model at `path` (a folder with `config.json`, `model.safetensors` and `tokenizer.json`, or a `.gguf`
 ## file) on `backend`, with weights of `weights` dtype. `n_ctx` caps the positions a request can use.
 def load(path: String, backend: Tensor.Backend, weights: Tensor.Dtype, n_ctx: Int) -> Result[Loaded]
@@ -74,6 +80,15 @@ def run(loaded: Loaded, requests: Channel[Contract.GenRequest]) -> Result[Void]
   ok()
 end
 
+## The text that `held` completes. A character can be split between tokens, so while the text ends in a replacement
+## character the tokens wait for the next one; at `MAX_HELD` of them the bytes are broken and the replacements stay.
+def whole_text(tokenizer: Bpe.ByteLevelBpe, held: List[Int]) -> Result[Piece]
+  text = try Bpe.decode(tokenizer, held)
+  return ok(Piece(text: "", held: held)) if text.end_with?(String.from_code(65533)) and held.size < MAX_HELD
+
+  ok(Piece(text: text, held: []))
+end
+
 private
 
 IDLE_WAIT_MS = 100
@@ -81,18 +96,14 @@ REPLY_TIMEOUT_MS = 5000
 ## A character is at most 4 bytes, and a token is at least one: after this many tokens held, the bytes are broken.
 MAX_HELD = 4
 SEED_MODULUS = 2147483646
+## A request whose reader left is dropped before its first step and then every this many tokens.
+CHECK_EVERY = 4
 
 ## The id that a step chose, the cache after it and the state of the draws.
 struct Next
   id: Int
   cache: Generate.Cache
   state: Int
-end
-
-## The tokens that were sampled and are not text yet, and the text that they complete.
-struct Piece
-  text: String
-  held: List[Int]
 end
 
 def open_tokenizer(path: String) -> Result[Bpe.ByteLevelBpe]
@@ -102,15 +113,14 @@ def open_tokenizer(path: String) -> Result[Bpe.ByteLevelBpe]
 end
 
 def stop_ids(tokenizer: Bpe.ByteLevelBpe) -> Result[List[Int]]
-  ids: List[Int] = []
-  for name in ["<|im_end|>", "<|endoftext|>"]
-    found = try Bpe.encode(tokenizer, name)
-    if found.size == 1
-      ids = ids.push(found[0])
-    end
-  end
+  ends = try Bpe.encode(tokenizer, "<|im_end|>")
+  return error("the tokenizer has no <|im_end|> token") if ends.size != 1
 
-  return error("the tokenizer has no <|im_end|> or <|endoftext|>") if ids.empty?
+  ids = ends
+  found = try Bpe.encode(tokenizer, "<|endoftext|>")
+  if found.size == 1
+    ids = ids.push(found[0])
+  end
 
   ok(ids)
 end
@@ -134,13 +144,13 @@ end
 def answer(loaded: Loaded, request: Contract.GenRequest) -> Void
   room = loaded.context - request.prompt.size
   if request.prompt.empty? or room < 1
-    refuse(request, "the prompt does not fit in a context of #{loaded.context} tokens")
+    refuse(request, "the prompt does not fit in a context of #{loaded.context} tokens", Contract.Fault.Client)
     return
   end
 
   case sampling_of(request)
     ok(sampling) -> decode(loaded, request, sampling, Numbers.smaller(request.max_tokens, room))
-    error(e) -> refuse(request, e.message)
+    error(e) -> refuse(request, e.message, Contract.Fault.Client)
   end
 end
 
@@ -159,9 +169,15 @@ def decode(loaded: Loaded, request: Contract.GenRequest, sampling: Optional[Samp
   parts: List[String] = []
   reason = "length"
   while generated < limit
+    # The reader of a whole answer may have left: a stream finds out when its send fails.
+    if generated % CHECK_EVERY == 0 and request.reply.closed?
+      Generate.finish(cache)
+      return
+    end
+
     case next_token(loaded, cache, feed, sampling, state)
       error(e) ->
-        refuse(request, e.message)
+        refuse(request, e.message, Contract.Fault.Internal)
         return
       ok(drawn) ->
         cache = drawn.cache
@@ -173,7 +189,15 @@ def decode(loaded: Loaded, request: Contract.GenRequest, sampling: Optional[Samp
 
         generated += 1
         feed = [drawn.id]
-        piece = whole_text(loaded.tokenizer, held.push(drawn.id))
+        piece = Piece(text: "", held: held)
+        case whole_text(loaded.tokenizer, held.push(drawn.id))
+          ok(found) -> piece = found
+          error(e) ->
+            Generate.finish(cache)
+            refuse(request, e.message, Contract.Fault.Internal)
+            return
+        end
+
         held = piece.held
         if request.stream and not piece.text.empty?
           delta = Contract.GenResult(
@@ -225,15 +249,6 @@ def next_token(
   ok(Next(id: picked.id, cache: picked.cache, state: state))
 end
 
-# The text that `held` completes. A character can be split between tokens, so while the text ends in a replacement
-# character the tokens wait for the next one; more than `MAX_HELD` of them are broken bytes and the replacement stays.
-def whole_text(tokenizer: Bpe.ByteLevelBpe, held: List[Int]) -> Piece
-  text = Bpe.decode(tokenizer, held).unwrap_or("")
-  return Piece(text: "", held: held) if text.end_with?(String.from_code(65533)) and held.size < MAX_HELD
-
-  Piece(text: text, held: [])
-end
-
 def finish(request: Contract.GenRequest, text: String, generated: Int, reason: String) -> Void
   shown = text
   wait = REPLY_TIMEOUT_MS
@@ -253,6 +268,6 @@ def finish(request: Contract.GenRequest, text: String, generated: Int, reason: S
   _ = request.reply.send(result, wait)
 end
 
-def refuse(request: Contract.GenRequest, message: String) -> Void
-  _ = request.reply.send(Contract.refusal(message), 0)
+def refuse(request: Contract.GenRequest, message: String, fault: Contract.Fault) -> Void
+  _ = request.reply.send(Contract.refusal(message, fault), 0)
 end

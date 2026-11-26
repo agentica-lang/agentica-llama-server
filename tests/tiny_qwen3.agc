@@ -1,7 +1,8 @@
 ## A tiny random Qwen3 as a Hugging Face folder (`config.json`, `model.safetensors`, `tokenizer.json`), for the tests of
 ## `server_ml.agc`: the same weights every time, and a tokenizer that holds the 256 byte tokens, so any text encodes.
 ##
-## `agentica tests/tiny_qwen3.agc DIR` writes the folder `DIR`. It is a program of its own because writing the weights on
+## `agentica tests/tiny_qwen3.agc DIR [stop]` writes the folder `DIR`; with `stop` it is a model whose greedy answer is
+## `<|im_end|>` at once (its final norm is zero, so every logit ties, and `<|im_end|>` is the first id). It is a program of its own because writing the weights on
 ## the reference backend takes more steps than a test has.
 ##
 ## The output head gives the printable ASCII tokens (32 to 126) logits far above the rest, which stay at 0: whatever
@@ -26,12 +27,12 @@ MODULUS = 2147483647
 
 def main() -> Void
   args = System.args()
-  if args.size != 1
-    IO.warn("usage: agentica tests/tiny_qwen3.agc DIR")
+  if args.size < 1 or args.size > 2 or (args.size == 2 and args[1] != "stop")
+    IO.warn("usage: agentica tests/tiny_qwen3.agc DIR [stop]")
     System.exit(2)
   end
 
-  written = write(args[0])
+  written = write(args[0], args.size == 2)
   if !written.ok?
     IO.warn("tiny_qwen3: #{written.message}")
     System.exit(1)
@@ -39,11 +40,11 @@ def main() -> Void
 end
 
 ## Writes the model folder `dir` (made if needed).
-def write(dir: String) -> Result[Void]
+def write(dir: String, stops_at_once: Bool) -> Result[Void]
   try Dir.mkdir(dir)
   try File.write_text("#{dir}/config.json", config())
-  try File.write_text("#{dir}/tokenizer.json", try tokenizer())
-  SafetensorsWrite.write("#{dir}/model.safetensors", try weights())
+  try File.write_text("#{dir}/tokenizer.json", try tokenizer(stops_at_once))
+  SafetensorsWrite.write("#{dir}/model.safetensors", try weights(stops_at_once))
 end
 
 private
@@ -84,14 +85,24 @@ end
 
 # --- the tokenizer
 
-def tokenizer() -> Result[String]
-  vocab: Map[String, Int] = {}
-  for b in 0...BYTES
-    vocab = vocab.put(byte_char(b), b)
+## The byte tokens come first, then the three added ones; with `stops_at_once` the added ones come first, with
+## `<|im_end|>` the id 0.
+def tokenizer(stops_at_once: Bool) -> Result[String]
+  first_byte = 0
+  first_added = BYTES
+  added = ["<|endoftext|>", "<|im_start|>", "<|im_end|>"]
+  if stops_at_once
+    first_byte = 3
+    first_added = 0
+    added = ["<|im_end|>", "<|endoftext|>", "<|im_start|>"]
   end
 
-  added = ["<|endoftext|>", "<|im_start|>", "<|im_end|>"]
-  entries = added.map do |t| added_entry(BYTES + added.index(t).unwrap_or(0), t) end
+  vocab: Map[String, Int] = {}
+  for b in 0...BYTES
+    vocab = vocab.put(byte_char(b), first_byte + b)
+  end
+
+  entries = added.map do |t| added_entry(first_added + added.index(t).unwrap_or(0), t) end
   ok(
     "{\"version\":\"1.0\",\"truncation\":null,\"padding\":null,\"added_tokens\":[#{entries.join(",")}]," +
     "\"normalizer\":{\"type\":\"NFC\"},\"pre_tokenizer\":#{PRE_TOKENIZER}," +
@@ -127,7 +138,7 @@ end
 
 # --- the weights
 
-def weights() -> Result[Map[String, Tensor.Tensor]]
+def weights(zero_norm: Bool) -> Result[Map[String, Tensor.Tensor]]
   w = Weights(seed: 1, tensors: {})
   w = try add(w, "model.embed_tokens.weight", [VOCAB, HIDDEN], 0.0, 0.5)
   for i in 0...LAYERS
@@ -145,7 +156,12 @@ def weights() -> Result[Map[String, Tensor.Tensor]]
     w = try add(w, "#{p}.mlp.down_proj.weight", [HIDDEN, INTERMEDIATE], 0.0, 0.5)
   end
 
-  w = try add(w, "model.norm.weight", [HIDDEN], 1.0, 0.2)
+  if zero_norm
+    w = try add(w, "model.norm.weight", [HIDDEN], 0.0, 0.0)
+  else
+    w = try add(w, "model.norm.weight", [HIDDEN], 1.0, 0.2)
+  end
+
   w = try add_head(w)
   ok(w.tensors)
 end

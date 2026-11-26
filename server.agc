@@ -51,7 +51,7 @@ def serve(options: Cli.Options) -> Result[Void]
     stats: options.stats,
   )
 
-  engine = Task.spawn(&run_engine, EngineJob(model: model, config: config, requests: requests))
+  engine = Task.spawn_link(&run_engine, EngineJob(model: model, config: config, requests: requests))
   api = Api.new_api(Engines.handle(model, requests, "qwen2.5-0.5b-instruct", options.n_ctx))
   server = try Bond.start_with(
     Api.app(api),
@@ -64,6 +64,15 @@ def serve(options: Cli.Options) -> Result[Void]
   IO.flush()
   try Bond.wait(server)
   Task.await(engine)
+  ok()
 end
 
-def run_engine(job: EngineJob) -> Result[Void] = Engines.run(job.model, job.config, job.requests)
+# The engine ends only with an error (it returns when it cannot start): the process ends with it, not hangs.
+def run_engine(job: EngineJob) -> Void
+  case Engines.run(job.model, job.config, job.requests)
+    ok(_) -> nil
+    error(e) ->
+      IO.warn("engine: #{e.message}")
+      System.exit(1)
+  end
+end

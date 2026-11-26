@@ -113,6 +113,7 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
 
   max_tokens = body.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)
   return Bond.bad_request("max_tokens must be at least 1") if max_tokens < 1
+  return Bond.bad_request("temperature must not be negative") if body.temperature.unwrap_or(1.0) < 0.0
 
   tokens = api.engine.prompt.call(body.messages)
   return Bond.bad_request(tokens.message) if not tokens.ok?
@@ -150,13 +151,24 @@ def wants_usage(body: ChatRequest) -> Bool
   end
 end
 
+# The reader gives up (a timeout) by closing `reply`: the engine skips a request whose reply is closed.
 def answer(api: Api, conn: Bond.Conn, reply: Channel[Contract.GenResult]) -> Result[Bond.Conn]
   case reply.recv(ANSWER_TIMEOUT_MS)
     ok(result) ->
-      return ok(Bond.halt(conn, 400, result.failure)) if result.finish_reason == "error"
+      return ok(refused(conn, result)) if result.finish_reason == "error"
 
       ok(respond(api, conn, result))
-    error(e) -> ok(Bond.halt(conn, 504, e.message))
+    error(e) ->
+      reply.close
+      ok(Bond.halt(conn, 504, e.message))
+  end
+end
+
+# A request's own fault is a 400, the engine's a 500.
+def refused(conn: Bond.Conn, result: Contract.GenResult) -> Bond.Conn
+  case result.fault
+    Contract.Fault.Client -> Bond.halt(conn, 400, result.failure)
+    _ -> Bond.halt(conn, 500, result.failure)
   end
 end
 
@@ -193,7 +205,7 @@ def stream_answer(
 ) -> Result[Bond.Conn]
   case reply.recv(ANSWER_TIMEOUT_MS)
     ok(first) ->
-      return ok(Bond.halt(conn, 400, first.failure)) if first.finish_reason == "error"
+      return ok(refused(conn, first)) if first.finish_reason == "error"
 
       events: Channel[Bytes] = Channel.new(EVENT_BUFFER)
       pump = Pump(

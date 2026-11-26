@@ -158,9 +158,11 @@ end
 
 # Gives the request the lowest free slot. A request that cannot run is answered here and dropped.
 def start(engine: Engine, active: List[Seq], request: Contract.GenRequest) -> Result[Seq]
+  return error("gone") if request.reply.closed?
+
   per_seq = engine.config.n_ctx / engine.config.n_parallel
   if request.prompt.empty? or request.prompt.size >= per_seq
-    refuse(request, "the prompt does not fit in a slot of #{per_seq} tokens")
+    refuse(request, "the prompt does not fit in a slot of #{per_seq} tokens", Contract.Fault.Client)
     return error("refused")
   end
 
@@ -180,7 +182,7 @@ def start(engine: Engine, active: List[Seq], request: Contract.GenRequest) -> Re
         ),
       )
     error(e) ->
-      refuse(request, e.message)
+      refuse(request, e.message, Contract.Fault.Internal)
       error("refused")
   end
 end
@@ -255,6 +257,12 @@ end
 
 # Adds the sequence to `kept` unless it finished.
 def settle(engine: Engine, kept: List[Seq], feed: Feed) -> List[Seq]
+  # The reader of a whole answer left (a stream finds out when its send fails).
+  if feed.seq.request.reply.closed?
+    release(engine, feed.seq)
+    return kept
+  end
+
   seq = feed.seq.with(pending: feed.seq.pending.drop(feed.fed), pos: feed.seq.pos + feed.fed)
   return kept.push(seq) if feed.row < 0
 
@@ -358,7 +366,7 @@ end
 
 def fail_seq(engine: Engine, seq: Seq, message: String) -> Void
   release(engine, seq)
-  refuse(seq.request, message)
+  refuse(seq.request, message, Contract.Fault.Internal)
 end
 
 def release(engine: Engine, seq: Seq) -> Void
@@ -366,6 +374,6 @@ def release(engine: Engine, seq: Seq) -> Void
   Native.close(seq.sampler)
 end
 
-def refuse(request: Contract.GenRequest, message: String) -> Void
-  _ = request.reply.send(Contract.refusal(message), 0)
+def refuse(request: Contract.GenRequest, message: String, fault: Contract.Fault) -> Void
+  _ = request.reply.send(Contract.refusal(message, fault), 0)
 end

@@ -89,7 +89,7 @@ make test    # or: make test-bindings test-fetch test-bench test-cli test-api te
 agentica test tests/api_test.agc
 ```
 
-`make check`, `make fmt-check` and `make test` run the type check, the format check and the six test files (`make
+`make check`, `make fmt-check` and `make test` run the type check, the format check and the seven test files (`make
 install` fetches the packages; `AGENTICA=` picks the binary). Each `make test-*` fails unless its file passes the count
 of tests in the `Makefile`, so a run that tests nothing fails. CI runs them on Linux with the pinned Agentica release,
 in [.github/workflows/ci.yml](../.github/workflows/ci.yml).
@@ -101,7 +101,11 @@ closed when the run ends, failed or not.
 
 `tests/api_ml_test.agc` runs the same checks (`tests/api_cases.agc`) on `server_ml.agc` and a tiny random Qwen3 that
 `tests/tiny_qwen3.agc` writes (on the reference backend: no model download, no llama.cpp, no ggml), and checks that the
-process maps no llama.cpp library. The tiny model gives ASCII text only, so a stream has no broken character.
+process maps no llama.cpp library and that `server_ml.agc` imports no file of the llama.cpp engine. The tiny model gives
+ASCII text only, so a stream never splits a character: the split and the broken bytes are checked on `whole_text`, and
+a second tiny model (greedy ends at once) checks `stop`. `tests/ml_engine_test.agc` runs the engine in the test process
+(`make test-ml-engine`, no step limit): a long request holds it, queued requests give up, and the next is answered when
+the long one ends.
 
 `tests/cli_test.agc` checks the flags (`--help`, bad values, a valid set) and needs the llama.cpp libraries, not the
 model.
