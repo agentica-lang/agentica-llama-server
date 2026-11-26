@@ -2,24 +2,18 @@
 ## `"stream": true`) and `GET /health`.
 
 import Bond from "pkg/bond/bond"
-import Engines from "../llama_server/engine"
-import Llama from "../llama_server/llama"
+import Contract from "../llama_server/contract"
 import Numbers from "../llama_server/numbers"
 
-## What the routes share: the model (to apply the chat template and tokenize), the engine's request channel and a
-## table with the request counter.
+## What the routes share: the engine and a table with the request counter.
 struct Api
-  model: Llama.Model
-  requests: Channel[Engines.GenRequest]
+  engine: Contract.Handle
   counters: ATS[String, Int]
-  model_name: String
-  n_ctx: Int
 end
 
-## `n_ctx` bounds how many pieces a stream can hold, so the engine never waits for a slow reader.
-def new_api(model: Llama.Model, requests: Channel[Engines.GenRequest], model_name: String, n_ctx: Int) -> Api
+def new_api(engine: Contract.Handle) -> Api
   counters: ATS[String, Int] = ATS.new()
-  Api(model: model, requests: requests, counters: counters, model_name: model_name, n_ctx: n_ctx)
+  Api(engine: engine, counters: counters)
 end
 
 def app(api: Api) -> Bond.App
@@ -44,7 +38,7 @@ struct StreamOptions
 end
 
 struct ChatRequest
-  messages: List[Llama.ChatMessage]
+  messages: List[Contract.Message]
   max_tokens: Optional[Int] = none
   temperature: Optional[Float] = none
   seed: Optional[Int] = none
@@ -102,9 +96,9 @@ end
 
 # What the task that turns engine pieces into events needs; it cannot take the `Conn`.
 struct Pump
-  reply: Channel[Engines.GenResult]
+  reply: Channel[Contract.GenResult]
   events: Channel[Bytes]
-  first: Engines.GenResult
+  first: Contract.GenResult
   id: String
   created: Int
   model: String
@@ -120,17 +114,16 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
   max_tokens = body.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)
   return Bond.bad_request("max_tokens must be at least 1") if max_tokens < 1
 
-  text = try Llama.chat_prompt(api.model, body.messages)
-  prompt = try Llama.tokenize(api.model, text)
+  prompt = try api.engine.prompt.call(body.messages)
   stream = body.stream.unwrap_or(false)
   # A stream is a piece per token and the engine never waits, so the channel holds the whole answer.
   room = 1
   if stream
-    room = Numbers.smaller(max_tokens, api.n_ctx) + 2
+    room = Numbers.smaller(max_tokens, api.engine.n_ctx) + 2
   end
 
-  reply: Channel[Engines.GenResult] = Channel.new(room)
-  request = Engines.GenRequest(
+  reply: Channel[Contract.GenResult] = Channel.new(room)
+  request = Contract.GenRequest(
     prompt: prompt,
     max_tokens: max_tokens,
     temperature: body.temperature.unwrap_or(1.0),
@@ -139,7 +132,7 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
     reply: reply,
   )
 
-  case api.requests.send(request, ANSWER_TIMEOUT_MS)
+  case api.engine.requests.send(request, ANSWER_TIMEOUT_MS)
     ok(_) ->
       return stream_answer(api, conn, reply, wants_usage(body)) if stream
 
@@ -155,7 +148,7 @@ def wants_usage(body: ChatRequest) -> Bool
   end
 end
 
-def answer(api: Api, conn: Bond.Conn, reply: Channel[Engines.GenResult]) -> Result[Bond.Conn]
+def answer(api: Api, conn: Bond.Conn, reply: Channel[Contract.GenResult]) -> Result[Bond.Conn]
   case reply.recv(ANSWER_TIMEOUT_MS)
     ok(result) ->
       return ok(Bond.halt(conn, 400, result.failure)) if result.finish_reason == "error"
@@ -165,12 +158,12 @@ def answer(api: Api, conn: Bond.Conn, reply: Channel[Engines.GenResult]) -> Resu
   end
 end
 
-def respond(api: Api, conn: Bond.Conn, result: Engines.GenResult) -> Bond.Conn
+def respond(api: Api, conn: Bond.Conn, result: Contract.GenResult) -> Bond.Conn
   response = ChatResponse(
     id: "chatcmpl-#{api.counters.add("requests", 1)}",
     object: "chat.completion",
     created: Time.now_ms() / 1000,
-    model: api.model_name,
+    model: api.engine.model_name,
     choices: [
       Choice(
         index: 0,
@@ -193,7 +186,7 @@ end
 def stream_answer(
   api: Api,
   conn: Bond.Conn,
-  reply: Channel[Engines.GenResult],
+  reply: Channel[Contract.GenResult],
   include_usage: Bool,
 ) -> Result[Bond.Conn]
   case reply.recv(ANSWER_TIMEOUT_MS)
@@ -207,7 +200,7 @@ def stream_answer(
         first: first,
         id: "chatcmpl-#{api.counters.add("requests", 1)}",
         created: Time.now_ms() / 1000,
-        model: api.model_name,
+        model: api.engine.model_name,
         include_usage: include_usage,
       )
 
@@ -232,7 +225,7 @@ def pump_events(pump: Pump) -> Void
   pump.events.close
 end
 
-def relay(pump: Pump, first: Engines.GenResult) -> Void
+def relay(pump: Pump, first: Contract.GenResult) -> Void
   piece = first
   while true
     if piece.finish_reason == "error"
@@ -282,7 +275,7 @@ end
 
 # The usage chunk of `stream_options.include_usage`: no choices, only the counts.
 
-def send_usage(pump: Pump, last: Engines.GenResult) -> Bool
+def send_usage(pump: Pump, last: Contract.GenResult) -> Bool
   usage = Usage(
     prompt_tokens: last.prompt_tokens,
     completion_tokens: last.completion_tokens,
