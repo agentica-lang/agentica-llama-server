@@ -6,6 +6,8 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Added
 
+- `docs/ml.md` says how to measure the aggregate tokens per second and the time to first token of N clients with `bench/client.agc` against either server, and what a linux-arm64 (c8g) or inf2 box still lacks (ml#349, ml#243).
+- `make test-api-stub` (a refusal has the status of its fault) and a bench client case in the ml API test.
 - `server_ml.agc` serves the API over the transformers of ml (Qwen3 and Qwen2.5, a Hugging Face folder or a GGUF file), one request at a time, with streaming and the usage counts; no llama.cpp library is loaded. See `docs/ml.md`.
 - `server.agc` and `server_ml.agc`: a negative `temperature` is a `400`; a failure of the engine (not of the request) is a `500`; the process ends when the engine task crashes or cannot start; an engine skips a request whose reply channel is closed.
 - The routes talk to an engine through `src/llama_server/contract.agc`; `make test-api-ml` runs the API checks on the ml engine with a tiny random Qwen3.

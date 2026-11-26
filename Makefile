@@ -7,10 +7,11 @@ FETCH_TESTS = 15
 BENCH_TESTS = 3
 CLI_TESTS = 6
 API_TESTS = 9
-ML_API_TESTS = 17
+ML_API_TESTS = 18
+STUB_TESTS = 1
 ML_ENGINE_TESTS = 1
 
-.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-bench test-cli test-api test-api-ml test-ml-engine test
+.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-bench test-cli test-api test-api-ml test-api-stub test-ml-engine test
 
 install:
 	$(AGENTICA) install
@@ -61,8 +62,12 @@ test-api:
 test-api-ml:
 	$(call agc_tests,api_ml,$(ML_API_TESTS))
 
+# The routes on a stub engine in the test process: the status of a refusal follows its fault. Needs `agentica install`.
+test-api-stub:
+	$(call agc_tests,api_stub,$(STUB_TESTS))
+
 # ml_engine.agc in this process, on the same tiny model: it decodes in the test, so it has no step limit.
 test-ml-engine:
 	$(call agc_tests,ml_engine,$(ML_ENGINE_TESTS),--max-steps unlimited)
 
-test: test-bindings test-fetch test-bench test-cli test-api test-api-ml test-ml-engine
+test: test-bindings test-fetch test-bench test-cli test-api test-api-ml test-api-stub test-ml-engine

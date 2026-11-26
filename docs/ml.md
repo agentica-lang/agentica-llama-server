@@ -51,3 +51,54 @@ backend**: a run on `ggml` or `vulkan` is not verified by any test here.
 llama.cpp's `libggml.so` and ml's statically linked ggml must never load into the same process. `server_ml.agc`
 imports nothing that calls llama.cpp, the natives load at the first call, and `tests/api_ml_test.agc` checks that the
 server process maps no `libllama` and no `libggml`.
+
+## Measuring tokens per second
+
+`bench/client.agc` is a closed-loop client for any OpenAI-style server, `server.agc` or `server_ml.agc`: one task per
+concurrent client, each with its own connection, sending requests back to back. It prints one JSON line with the
+**aggregate** generated tokens per second (`gen_tok_per_s`: all the clients together, over the wall time), requests per
+second, the latency percentiles, and, with `--stream`, the time to first token (`ttft_p50_s`, `ttft_p95_s`: until the
+first event with text).
+
+```sh
+agentica bench/client.agc --url http://127.0.0.1:8080 --concurrency 1 --requests 8 --max-tokens 64 --stream
+for c in 1 2 4 8 16; do
+  agentica bench/client.agc --url http://127.0.0.1:8080 --concurrency $c --requests $((c * 4)) --max-tokens 64 --stream
+done
+```
+
+Add `--extra '{"temperature":0}'` for greedy answers. Run the client on the same box as the server, or on another one in the
+same network. `tests/api_ml_test.agc` runs it against the tiny model.
+
+What to expect from the two engines: `server.agc` batches its slots (`--parallel`), so its aggregate rate grows with the
+clients until the CPU is full; `server_ml.agc` decodes one sequence at a time, so its aggregate rate stays at that of one
+client and the time to first token of the later clients grows with the queue (the clients wait for the ones in front).
+That gap is what the batched decode of ml#90 is for.
+
+Use the same model on both: llama.cpp reads a GGUF, ml a GGUF or a Hugging Face folder.
+
+## A fresh linux-arm64 box (AWS c8g)
+
+1. Agentica: the release asset `agentica-0.38.0-linux-arm64.tar.gz` of
+   [agentica-lang/agentica](https://github.com/agentica-lang/agentica/releases) (check it against the release's
+   `SHA256SUMS`: `84efaabcf21ab578407a49e9e0fdb564316c2ba60fed3dcb2aeb8168804f9855`), extracted, with its `bin/` on `PATH`.
+   `git` and a C compiler (`gcc`) are needed too.
+2. This repository, then `agentica install` (Bond and ml's packages, by tag).
+3. The model: for Qwen3-0.6B, `config.json`, `tokenizer.json` and `model.safetensors` of `Qwen/Qwen3-0.6B` into one
+   folder.
+4. **ml's ggml backend does not build on linux-arm64 yet** ([ml#349](https://github.com/agentica-lang/ml/issues/349)):
+   `tensor/tools/build-engine.sh` is for Linux x86_64 only. The reference backend runs there but is far too slow to
+   measure. When ml#349 is done, the build is the one of x86_64: a checkout of ml at the tag of `tensor` in
+   `agentica.toml` with `git submodule update --init third_party/ggml`, then
+   `eval "$(sh tensor/tools/build-engine.sh | grep '^export ')"` in the shell that runs the server (it prints the
+   `C_INCLUDE_PATH` and `LIBRARY_PATH` that the native module needs; the module builds at the first run).
+5. `agentica server_ml.agc --model ~/models/Qwen3-0.6B --backend ggml --weights f16 --ctx 2048`, and the client above.
+
+`server.agc` (llama.cpp) is not supported on arm64: `scripts/fetch.agc` fetches the x86_64 llama.cpp release. A llama.cpp
+number on c8g needs a llama.cpp build for arm64, which this repository does not fetch.
+
+## inf2 (Neuron)
+
+Not possible yet: Qwen3 does not run on `Backend.Xla`
+([ml#243](https://github.com/agentica-lang/ml/issues/243): the transformer ops in the emitter and a decode with fixed
+shapes). The engine here takes a backend from `--backend`, so a new one is a case of `backend_of` in `server_ml.agc`.

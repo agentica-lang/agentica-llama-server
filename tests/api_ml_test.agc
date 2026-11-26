@@ -7,6 +7,7 @@
 
 import Bpe from "pkg/transformers/tokenizer/bpe"
 import Cases from "api_cases"
+import Client from "../bench/client"
 import MlEngine from "../src/llama_server/ml_engine"
 import Tiny from "tiny_qwen3"
 
@@ -48,6 +49,7 @@ def own_tests(port: Int, stop_port: Int, dir: String, server: Process) -> List[T
     Test.test("a model that ends the answer at once says stop with no text") do check_stop(stop_port) end,
     Test.test("a character split between tokens waits for its last byte") do check_split_character(dir) end,
     Test.test("broken bytes are released after four tokens") do check_broken_bytes(dir) end,
+    Test.test("the bench client reports tokens per second and the time to first token") do check_bench(port) end,
     Test.test("the process loads no llama.cpp library") do loads_no_llama(server) end,
     Test.test("server_ml.agc imports nothing of llama.cpp") do imports_no_llama() end,
   ]
@@ -146,6 +148,35 @@ def check_broken_bytes(dir: String) -> Result[Void]
   released = try MlEngine.whole_text(tokenizer, held.push(BYTE_80))
   try Test.eq(released.text, String.from_code(65533) * 4)
   Test.eq(released.held.size, 0)
+end
+
+## `bench/client.agc` with three clients in a stream: all the requests answered, the aggregate tokens per second and the
+## time to first token measured. This is the run that `docs/ml.md` gives for a box.
+def check_bench(port: Int) -> Result[Void]
+  args = [
+    "bench/client.agc",
+    "--url",
+    "http://127.0.0.1:#{port}",
+    "--concurrency",
+    "3",
+    "--requests",
+    "6",
+    "--max-tokens",
+    "8",
+    "--stream",
+  ]
+
+  client = try Process.spawn_captured(System.env("AGENTICA").unwrap_or("agentica"), args)
+  out = try Process.output(client, SERVER_MS)
+  code = try Process.wait(client, SERVER_MS)
+  try Test.assert(code == 0, "the client exited with #{code}: #{out.stderr}")
+  run = try JSON.decode(out.stdout.strip, Client.RunResult)
+  try Test.eq(run.concurrency, 3)
+  try Test.eq(run.requests, 6)
+  try Test.eq(run.failures, 0)
+  try Test.eq(run.completion_tokens, 48)
+  try Test.assert(run.gen_tok_per_s > 0.0, "no tokens per second")
+  Test.assert(run.ttft_p50_s != JSON.Field.Absent, "no time to first token")
 end
 
 ## The ml engine must not share a process with llama.cpp's libggml: ml's ggml module links its own. The maps of any
