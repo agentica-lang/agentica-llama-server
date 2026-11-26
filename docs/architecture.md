@@ -1,7 +1,7 @@
 # Architecture
 
 The [Bond](https://github.com/agentica-lang/bond) web framework in front of llama.cpp, called through the Agentica FFI
-(no C code). Tested with Agentica 0.35.0 (CI) and Bond 0.15.1.
+(no C code). Tested with Agentica 0.38.0 (CI) and Bond 0.15.1.
 
 ## How it works
 
@@ -13,6 +13,11 @@ The [Bond](https://github.com/agentica-lang/bond) web framework in front of llam
   `--parallel` sequences (each its own `seq_id`, its own `n_ctx / parallel` share of the KV cache), decodes once,
   samples every sequence with llama.cpp's sampler chain in C, and answers on a per-request channel. A freed slot takes the
   next waiting request in the next step.
+- [src/llama_server/contract.agc](../src/llama_server/contract.agc): what the routes know of an engine: `GenRequest` and
+  `GenResult`, and a `Handle` (a request channel, the model name, the context and a function from messages to token
+  ids). An engine is a task that serves that channel. `engine.agc` is the one above;
+  [src/llama_server/ml_engine.agc](../src/llama_server/ml_engine.agc) is the one on ml's transformers
+  ([ml.md](ml.md)).
 - [src/llama_server_web/api.agc](../src/llama_server_web/api.agc), [server.agc](../server.agc): Bond routes `POST /v1/chat/completions` (OpenAI shape:
   `messages`, `max_tokens`, `temperature`, `seed`, `stream`, `stream_options.include_usage`) and `GET /health`.
   A plain request is answered with `Bond.json_as(conn, 200, ChatResponse.codec, response)`.
@@ -57,14 +62,16 @@ client <-SSE- Bond (std/http) <- events: Channel[Bytes] <- pump task <- reply: C
 
 ```text
 agentica.toml, agentica.lock   Bond pinned by tag; [native.llama] and [native.ggml]
-server.agc                     the program (wiring)
-src/llama_server/              the domain: engine.agc, llama.agc (FFI), numbers.agc, cli.agc (the flags, `std/option_parser`)
+server.agc, server_ml.agc      the programs (wiring): llama.cpp, ml
+src/llama_server/              the domain: contract.agc, engine.agc, llama.agc (FFI), ml_engine.agc, numbers.agc, cli.agc and
+                               ml_cli.agc (the flags, `std/option_parser`)
 src/llama_server_web/          HTTP: api.agc (the Bond routes)
 smoke.agc                      one sequence, to check the bindings
 scripts/                       fetch.agc (the release, its sha256s and the model are recorded in llama-release and model), check_bindings.agc
 bench/client.agc, run_all.agc  the load client and the comparison runner
 bench/results/                 the JSON of every run behind the tables
-tests/api_test.agc             end-to-end test of the routes, streaming and a client that leaves
+tests/api_cases.agc            the end-to-end checks of the routes, streaming and a client that leaves, for any engine
+tests/api_test.agc             runs them on server.agc; tests/api_ml_test.agc on server_ml.agc (tests/tiny_qwen3.agc writes its model)
 tests/cli_test.agc             the flags: `--help`, a bad value, an unknown flag, a valid set (no model needed)
 tests/bindings_test.agc, fetch_test.agc   the bindings check and the fetch program, tested from outside
 ```

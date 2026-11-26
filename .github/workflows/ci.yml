@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  AGENTICA_VERSION: 0.35.0
-  AGENTICA_SHA256: 379b0494b84c89b121d089fab9b21879e939a4dd7e89661f6be34e70f13f6322
+  AGENTICA_VERSION: 0.38.0
+  AGENTICA_SHA256: e3452adc1c70423970284e29f90ea54b68900137da5d80f1650c243b568c5464
 
 jobs:
   # `agentica check` needs the llama.cpp libraries: the manifest names them as native files.

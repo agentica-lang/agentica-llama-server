@@ -85,11 +85,11 @@ in `agentica_ms`. CI has no GPU: it runs the CPU build with `--gpu-layers 0`.
 ## Test
 
 ```sh
-make test    # or: make test-bindings test-fetch test-bench test-cli test-api
+make test    # or: make test-bindings test-fetch test-bench test-cli test-api test-api-ml
 agentica test tests/api_test.agc
 ```
 
-`make check`, `make fmt-check` and `make test` run the type check, the format check and the five test files (`make
+`make check`, `make fmt-check` and `make test` run the type check, the format check and the six test files (`make
 install` fetches the packages; `AGENTICA=` picks the binary). Each `make test-*` fails unless its file passes the count
 of tests in the `Makefile`, so a run that tests nothing fails. CI runs them on Linux with the pinned Agentica release,
 in [.github/workflows/ci.yml](../.github/workflows/ci.yml).
@@ -98,6 +98,10 @@ in [.github/workflows/ci.yml](../.github/workflows/ci.yml).
 HTTP to it: the routes, the streamed chunks (they add up to the non-streaming greedy answer, UTF-8 stays whole, the
 stream ends with `[DONE]`), the 400 answers, and that clients that leave mid-stream free their slots. The server is
 closed when the run ends, failed or not.
+
+`tests/api_ml_test.agc` runs the same checks (`tests/api_cases.agc`) on `server_ml.agc` and a tiny random Qwen3 that
+`tests/tiny_qwen3.agc` writes (on the reference backend: no model download, no llama.cpp, no ggml), and checks that the
+process maps no llama.cpp library. The tiny model gives ASCII text only, so a stream has no broken character.
 
 `tests/cli_test.agc` checks the flags (`--help`, bad values, a valid set) and needs the llama.cpp libraries, not the
 model.

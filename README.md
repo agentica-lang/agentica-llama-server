@@ -18,20 +18,25 @@ curl -N localhost:8080/v1/chat/completions -H 'content-type: application/json' \
   -d '{"messages":[{"role":"user","content":"Say hello."}],"max_tokens":32,"stream":true}'
 ```
 
-`--gpu-layers N` offloads layers to a GPU (the Vulkan build: `agentica scripts/fetch.agc llama --variant vulkan`, see [docs/running.md](docs/running.md#gpu)). Needs Agentica 0.35.0 or later; Bond 0.15.1 is pinned in `agentica.toml`. Linux x86_64 is the only supported platform.
+`--gpu-layers N` offloads layers to a GPU (the Vulkan build: `agentica scripts/fetch.agc llama --variant vulkan`, see [docs/running.md](docs/running.md#gpu)). Needs Agentica 0.38.0 or later; Bond 0.15.1 is pinned in `agentica.toml`. Linux x86_64 is the only supported platform.
+
+`server_ml.agc` serves the same API over the transformers of [ml](https://github.com/agentica-lang/ml) (Qwen3 and Qwen2.5,
+a Hugging Face folder or a GGUF file) instead of llama.cpp, one request at a time: [docs/ml.md](docs/ml.md).
 
 Changes per release: [CHANGELOG.md](CHANGELOG.md).
 
 ## Layout
 
 ```text
-server.agc, smoke.agc     entry points, at the root (imports resolve from the importing file's folder)
-src/llama_server/         the domain: engine, llama.cpp FFI bindings, numbers, command line
+server.agc, server_ml.agc, smoke.agc
+                          entry points, at the root (imports resolve from the importing file's folder)
+src/llama_server/         the domain: the contract of an engine, the llama.cpp engine and bindings, the ml engine,
+                          numbers, command lines
 src/llama_server_web/     HTTP: the Bond routes (api)
 ```
 
 Rule: `llama_server/` never imports `llama_server_web/`, Bond or `std/http`. The web side calls the domain, never the
-reverse.
+reverse, and only through `contract.agc`: `server_ml.agc` loads no llama.cpp library.
 
 ## Benchmark
 
@@ -44,6 +49,7 @@ the ratios compare with older runs. Caveats: [docs/benchmark.md](docs/benchmark.
 ## Docs
 
 - [docs/running.md](docs/running.md): dependencies, server options, tests.
+- [docs/ml.md](docs/ml.md): the server on ml's transformers.
 - [docs/architecture.md](docs/architecture.md): the engine, continuous batching, sampling, the file map.
 - [docs/benchmark.md](docs/benchmark.md): setup, method, results, how to rerun, where the overhead is.
 - [docs/gaps.md](docs/gaps.md): gaps found in Agentica, Bond and the FFI.

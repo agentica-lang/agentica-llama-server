@@ -1,4 +1,4 @@
-# Needs Agentica 0.35.0 or later on PATH (or AGENTICA=/path/to/agentica).
+# Needs Agentica 0.38.0 or later on PATH (or AGENTICA=/path/to/agentica).
 AGENTICA ?= agentica
 
 # The number of tests each file of tests/ has: a run that tests fewer, or nothing, fails.
@@ -7,8 +7,9 @@ FETCH_TESTS = 15
 BENCH_TESTS = 3
 CLI_TESTS = 6
 API_TESTS = 8
+ML_API_TESTS = 10
 
-.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-bench test-cli test-api test
+.PHONY: install fetch check fmt-check check-bindings test-bindings test-fetch test-bench test-cli test-api test-api-ml test
 
 install:
 	$(AGENTICA) install
@@ -55,4 +56,8 @@ test-cli:
 test-api:
 	$(call agc_tests,api,$(API_TESTS))
 
-test: test-bindings test-fetch test-bench test-cli test-api
+# server_ml.agc on a tiny random Qwen3 that the test writes, on the reference backend. Needs `agentica install` only.
+test-api-ml:
+	$(call agc_tests,api_ml,$(ML_API_TESTS))
+
+test: test-bindings test-fetch test-bench test-cli test-api test-api-ml

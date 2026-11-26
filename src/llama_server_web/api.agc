@@ -114,7 +114,9 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
   max_tokens = body.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)
   return Bond.bad_request("max_tokens must be at least 1") if max_tokens < 1
 
-  prompt = try api.engine.prompt.call(body.messages)
+  tokens = api.engine.prompt.call(body.messages)
+  return Bond.bad_request(tokens.message) if not tokens.ok?
+
   stream = body.stream.unwrap_or(false)
   # A stream is a piece per token and the engine never waits, so the channel holds the whole answer.
   room = 1
@@ -124,7 +126,7 @@ def chat(api: Api, conn: Bond.Conn) -> Result[Bond.Conn]
 
   reply: Channel[Contract.GenResult] = Channel.new(room)
   request = Contract.GenRequest(
-    prompt: prompt,
+    prompt: tokens.unwrap!,
     max_tokens: max_tokens,
     temperature: body.temperature.unwrap_or(1.0),
     seed: body.seed.unwrap_or(0),
