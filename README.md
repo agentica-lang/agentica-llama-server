@@ -49,7 +49,7 @@ the ratios compare with older runs. Caveats: [docs/benchmark.md](docs/benchmark.
 ## Docs
 
 - [docs/running.md](docs/running.md): dependencies, server options, tests.
-- [docs/ml.md](docs/ml.md): the server on ml's transformers.
+- [docs/ml.md](docs/ml.md): the server on ml's transformers, measuring tokens per second with `bench/client.agc`, a linux-arm64 box.
 - [docs/architecture.md](docs/architecture.md): the engine, continuous batching, sampling, the file map.
 - [docs/benchmark.md](docs/benchmark.md): setup, method, results, how to rerun, where the overhead is.
 - [docs/gaps.md](docs/gaps.md): gaps found in Agentica, Bond and the FFI.
