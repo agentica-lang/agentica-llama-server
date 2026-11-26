@@ -6,3 +6,51 @@ git = "https://github.com/agentica-lang/bond"
 tag = "0.15.1"
 commit = "451fac5418a698572b9a3834ebd89a2feef01b32"
 hash = "sha256:6e7e4c6a56cf6781338bc541663db67d399e0b772d58530a8433faff4407eaa9"
+
+[[package]]
+name = "hub"
+git = "https://github.com/agentica-lang/ml"
+subdir = "hub"
+tag = "hub-0.6.0"
+commit = "f1de188492f250d1b1c9ba754d32636b26d08a26"
+hash = "sha256:e9a34f3096416eaa6fd1213ebc4173064c76c3b5b28abaa8c4b4bc82c8a0ff36"
+
+[[package]]
+name = "native-gen"
+git = "https://github.com/agentica-lang/packages"
+subdir = "native-gen"
+tag = "native-gen-0.5.0"
+commit = "32ebb6ea25d60e0f7a44e811c1f280db76c3e882"
+hash = "sha256:c1be453b21abab840feaa03242f0be32c1145fefe068dc131c8ce7c1b7b80652"
+
+[[package]]
+name = "nn"
+git = "https://github.com/agentica-lang/ml"
+subdir = "nn"
+tag = "nn-0.6.0"
+commit = "f1de188492f250d1b1c9ba754d32636b26d08a26"
+hash = "sha256:2c5816287ca83b024a104bc4399284518ce0761d32ded93ac877e5664442264b"
+
+[[package]]
+name = "tensor"
+git = "https://github.com/agentica-lang/ml"
+subdir = "tensor"
+tag = "tensor-0.6.0"
+commit = "f1de188492f250d1b1c9ba754d32636b26d08a26"
+hash = "sha256:a34331e4c8b6e39c08271de1347c9da4f074326fc1c10aeb4fb416e5925bfb96"
+
+[[package]]
+name = "train"
+git = "https://github.com/agentica-lang/ml"
+subdir = "train"
+tag = "train-0.6.0"
+commit = "f1de188492f250d1b1c9ba754d32636b26d08a26"
+hash = "sha256:2ebfdb697803bc3e47df311d8dcc946cd35d230e46d3741834f9073d4ba7bcf7"
+
+[[package]]
+name = "transformers"
+git = "https://github.com/agentica-lang/ml"
+subdir = "transformers"
+tag = "transformers-0.6.0"
+commit = "f1de188492f250d1b1c9ba754d32636b26d08a26"
+hash = "sha256:965f350871ccb59bb8f493fa6b0e46e93b759df9e7cbaf5c3d4ac61d93dcff9a"

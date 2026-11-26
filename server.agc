@@ -6,6 +6,7 @@
 import Api from "src/llama_server_web/api"
 import Bond from "pkg/bond/bond"
 import Cli from "src/llama_server/cli"
+import Contract from "src/llama_server/contract"
 import Engines from "src/llama_server/engine"
 import Llama from "src/llama_server/llama"
 import HTTP from "std/http"
@@ -16,7 +17,7 @@ REQUEST_QUEUE = 4096
 struct EngineJob
   model: Llama.Model
   config: Engines.EngineConfig
-  requests: Channel[Engines.GenRequest]
+  requests: Channel[Contract.GenRequest]
 end
 
 # `OP.run!` prints the help and exits 0, or prints a mistake of the command line to stderr and exits 2.
@@ -41,7 +42,7 @@ end
 def serve(options: Cli.Options) -> Result[Void]
   Llama.init(options.backends)
   model = try Llama.load_model(options.model, options.gpu_layers)
-  requests: Channel[Engines.GenRequest] = Channel.new(REQUEST_QUEUE)
+  requests: Channel[Contract.GenRequest] = Channel.new(REQUEST_QUEUE)
   config = Engines.EngineConfig(
     n_ctx: options.n_ctx,
     n_batch: options.n_batch,
@@ -50,8 +51,8 @@ def serve(options: Cli.Options) -> Result[Void]
     stats: options.stats,
   )
 
-  engine = Task.spawn(&run_engine, EngineJob(model: model, config: config, requests: requests))
-  api = Api.new_api(model, requests, "qwen2.5-0.5b-instruct", options.n_ctx)
+  engine = Task.spawn_link(&run_engine, EngineJob(model: model, config: config, requests: requests))
+  api = Api.new_api(Engines.handle(model, requests, "qwen2.5-0.5b-instruct", options.n_ctx))
   server = try Bond.start_with(
     Api.app(api),
     options.host,
@@ -63,6 +64,15 @@ def serve(options: Cli.Options) -> Result[Void]
   IO.flush()
   try Bond.wait(server)
   Task.await(engine)
+  ok()
 end
 
-def run_engine(job: EngineJob) -> Result[Void] = Engines.run(job.model, job.config, job.requests)
+# The engine ends only with an error (it returns when it cannot start): the process ends with it, not hangs.
+def run_engine(job: EngineJob) -> Void
+  case Engines.run(job.model, job.config, job.requests)
+    ok(_) -> nil
+    error(e) ->
+      IO.warn("engine: #{e.message}")
+      System.exit(1)
+  end
+end

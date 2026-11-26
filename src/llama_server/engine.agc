@@ -9,29 +9,9 @@
 ## engine never waits on that channel (its owner sizes it for the whole answer), and a send that fails (the reader
 ## closed the channel because its client left, or fell behind) ends the sequence and frees its slot.
 
+import Contract from "contract"
 import Llama from "llama"
 import Numbers from "numbers"
-
-## A request already tokenized by the route; the answer goes back on `reply`: one `GenResult`, or, when `stream` is
-## on, a piece per step and a last one with the finish reason.
-struct GenRequest
-  prompt: List[Int]
-  max_tokens: Int
-  temperature: Float
-  seed: Int
-  stream: Bool = false
-  reply: Channel[GenResult]
-end
-
-## The whole answer, or in a stream the text of one piece (`finish_reason` is "" until the last one, whose `text` is
-## empty). `completion_tokens` counts the tokens sampled so far in a piece.
-struct GenResult
-  text: String
-  prompt_tokens: Int
-  completion_tokens: Int
-  finish_reason: String
-  failure: String
-end
 
 struct EngineConfig
   n_ctx: Int
@@ -41,8 +21,19 @@ struct EngineConfig
   stats: Bool = false
 end
 
+## What the routes hold of the engine of `model`: `requests` is the channel that `run` reads, and a conversation is
+## turned into token ids with the chat template of the model.
+def handle(model: Llama.Model, requests: Channel[Contract.GenRequest], name: String, n_ctx: Int) -> Contract.Handle
+  Contract.Handle(
+    model_name: name,
+    n_ctx: n_ctx,
+    requests: requests,
+    prompt: ->(messages: List[Contract.Message]) { prompt_of(model, messages) },
+  )
+end
+
 ## Runs until the process ends; returns an error only when the context cannot be created.
-def run(model: Llama.Model, config: EngineConfig, requests: Channel[GenRequest]) -> Result[Void]
+def run(model: Llama.Model, config: EngineConfig, requests: Channel[Contract.GenRequest]) -> Result[Void]
   ctx = try Llama.new_context(model, config.n_ctx, config.n_batch, config.n_parallel, config.threads)
   engine = Engine(
     model: model,
@@ -101,7 +92,7 @@ end
 # A running request. `pending` holds the tokens not decoded yet: the prompt first, then the last sampled token.
 struct Seq
   slot: Int
-  request: GenRequest
+  request: Contract.GenRequest
   sampler: Llama.Sampler
   limit: Int
   pending: List[Int]
@@ -117,6 +108,11 @@ struct Feed
   seq: Seq
   fed: Int
   row: Int
+end
+
+def prompt_of(model: Llama.Model, messages: List[Contract.Message]) -> Result[List[Int]]
+  chat = messages.map do |m| Llama.ChatMessage(role: m.role, content: m.content) end
+  Llama.tokenize(model, try Llama.chat_prompt(model, chat))
 end
 
 # Adds a step to the window and prints the window to stderr every few seconds when `--stats` is on.
@@ -138,7 +134,7 @@ def account(config: EngineConfig, stats: Stats, done: StepResult, step_ns: Int) 
 end
 
 # Takes waiting requests while a slot is free. Idle, it waits a little for the first one; busy, it only looks.
-def admit(engine: Engine, seqs: List[Seq], requests: Channel[GenRequest]) -> List[Seq]
+def admit(engine: Engine, seqs: List[Seq], requests: Channel[Contract.GenRequest]) -> List[Seq]
   active = seqs
   while active.size < engine.config.n_parallel
     wait = 0
@@ -161,10 +157,12 @@ def admit(engine: Engine, seqs: List[Seq], requests: Channel[GenRequest]) -> Lis
 end
 
 # Gives the request the lowest free slot. A request that cannot run is answered here and dropped.
-def start(engine: Engine, active: List[Seq], request: GenRequest) -> Result[Seq]
+def start(engine: Engine, active: List[Seq], request: Contract.GenRequest) -> Result[Seq]
+  return error("gone") if request.reply.closed?
+
   per_seq = engine.config.n_ctx / engine.config.n_parallel
   if request.prompt.empty? or request.prompt.size >= per_seq
-    refuse(request, "the prompt does not fit in a slot of #{per_seq} tokens")
+    refuse(request, "the prompt does not fit in a slot of #{per_seq} tokens", Contract.Fault.Client)
     return error("refused")
   end
 
@@ -184,7 +182,7 @@ def start(engine: Engine, active: List[Seq], request: GenRequest) -> Result[Seq]
         ),
       )
     error(e) ->
-      refuse(request, e.message)
+      refuse(request, e.message, Contract.Fault.Internal)
       error("refused")
   end
 end
@@ -259,6 +257,12 @@ end
 
 # Adds the sequence to `kept` unless it finished.
 def settle(engine: Engine, kept: List[Seq], feed: Feed) -> List[Seq]
+  # The reader of a whole answer left (a stream finds out when its send fails).
+  if feed.seq.request.reply.closed?
+    release(engine, feed.seq)
+    return kept
+  end
+
   seq = feed.seq.with(pending: feed.seq.pending.drop(feed.fed), pos: feed.seq.pos + feed.fed)
   return kept.push(seq) if feed.row < 0
 
@@ -289,7 +293,14 @@ def settle_streaming(engine: Engine, kept: List[Seq], seq: Seq, token: Int, piec
   # Bytes that are not UTF-8 even when whole (a broken token) are dropped: the piece is empty.
   text = String.from_bytes(bytes.take(whole)).unwrap_or("")
   if not text.empty?
-    delta = GenResult(text: text, prompt_tokens: 0, completion_tokens: grown.generated, finish_reason: "", failure: "")
+    delta = Contract.GenResult(
+      text: text,
+      prompt_tokens: 0,
+      completion_tokens: grown.generated,
+      finish_reason: "",
+      failure: "",
+    )
+
     if not seq.request.reply.send(delta, 0).ok?
       release(engine, grown)
       return kept
@@ -337,7 +348,7 @@ def finish(engine: Engine, seq: Seq, reason: String) -> Void
   whole = Bytes.concat(seq.parts)
   text = String.from_bytes(whole.take(utf8_complete(whole))).unwrap_or("")
   release(engine, seq)
-  answer = GenResult(
+  answer = Contract.GenResult(
     text: text,
     prompt_tokens: seq.request.prompt.size,
     completion_tokens: seq.generated,
@@ -355,7 +366,7 @@ end
 
 def fail_seq(engine: Engine, seq: Seq, message: String) -> Void
   release(engine, seq)
-  refuse(seq.request, message)
+  refuse(seq.request, message, Contract.Fault.Internal)
 end
 
 def release(engine: Engine, seq: Seq) -> Void
@@ -363,7 +374,6 @@ def release(engine: Engine, seq: Seq) -> Void
   Native.close(seq.sampler)
 end
 
-def refuse(request: GenRequest, message: String) -> Void
-  answer = GenResult(text: "", prompt_tokens: 0, completion_tokens: 0, finish_reason: "error", failure: message)
-  _ = request.reply.send(answer, 0)
+def refuse(request: Contract.GenRequest, message: String, fault: Contract.Fault) -> Void
+  _ = request.reply.send(Contract.refusal(message, fault), 0)
 end

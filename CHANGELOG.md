@@ -4,9 +4,15 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+
+- `server_ml.agc` serves the API over the transformers of ml (Qwen3 and Qwen2.5, a Hugging Face folder or a GGUF file), one request at a time, with streaming and the usage counts; no llama.cpp library is loaded. See `docs/ml.md`.
+- `server.agc` and `server_ml.agc`: a negative `temperature` is a `400`; a failure of the engine (not of the request) is a `500`; the process ends when the engine task crashes or cannot start; an engine skips a request whose reply channel is closed.
+- The routes talk to an engine through `src/llama_server/contract.agc`; `make test-api-ml` runs the API checks on the ml engine with a tiny random Qwen3.
+
 ### Changed
 
-- **Breaking:** needs Agentica 0.35.0.
+- **Breaking:** needs Agentica 0.38.0 (the packages of ml need it).
 - `scripts/fetch.agc` downloads with `HTTP.download` and its `sha256:` check, not 32 MiB `Range` pieces: a server that ignores `Range` is no longer a failure.
 - `bench/run_all.agc` takes the pid of a server from `Process.pid` and runs from any folder: the repo root is the parent of `bench/` (`--root` still names another).
 
